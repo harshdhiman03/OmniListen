@@ -1,0 +1,4 @@
+aiohttp
+google-generativeai
+supabase
+python-dotenv
