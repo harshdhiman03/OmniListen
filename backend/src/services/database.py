@@ -31,7 +31,7 @@ class VectorDatabaseService:
         try:
             rpc_params = {
                 "query_embedding": query_vector,
-                "match_threshold": 0.65,
+                "match_threshold": -2.0,
                 "match_count": match_count
             }
             
