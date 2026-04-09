@@ -1,6 +1,6 @@
 import React from 'react';
 import { supabaseServer } from '@/lib/supabase';
-import UnifiedAudioPlayer from '@/components/UnifiedAudioPlayer';
+import AudioPlayer from '@/components/AudioPlayer';
 import GenerateButton from '@/components/GenerateButton';
 
 // Bypass aggressive static caching exclusively for the dashboard
@@ -58,36 +58,27 @@ export default async function DashboardPage() {
         : [];
 
     return (
-        <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black p-6 text-white font-sans selection:bg-cyan-500/30 font-inter">
-            <div className="max-w-4xl mx-auto space-y-12 py-12 px-8 min-h-screen relative">
+        <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-center overflow-hidden">
+            <div className="w-full max-w-4xl mx-auto px-8 relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
                 
                 {/* Dashboard Profile Header */}
-                <header className="flex items-center justify-between mb-20 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="space-y-1 -mt-2">
-                        <h1 className="text-4xl font-extrabold tracking-tight">
+                <header className="flex items-center justify-between w-full max-w-2xl mb-12 animate-in fade-in slide-in-from-top-4 duration-700">
+                    <div className="space-y-1">
+                        <h1 className="text-3xl font-extrabold tracking-tight">
                             Good morning, <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">{userName}</span>
                         </h1>
-                        <p className="text-lg text-gray-400 font-medium">Your personalized AI radio is tuned up.</p>
+                        <p className="text-sm text-gray-400 font-medium tracking-wide uppercase">Your daily briefing is ready</p>
                     </div>
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-2xl border-2 border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-xl border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
                         {userName.charAt(0).toUpperCase()}
                     </div>
                 </header>
 
-                <main className="w-full flex flex-col items-center justify-center mt-12 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 relative z-10">
+                <main className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 delay-150 relative z-10 flex-1">
                     {playlist && mappedTracks.length > 0 ? (
-                        <div className="w-full max-w-2xl space-y-8 absolute top-0 mt-8">
-                            <div className="flex items-center justify-between px-2 w-full max-w-md mx-auto mb-2">
-                                <h3 className="text-xl font-bold border-l-4 border-cyan-400 pl-3">Today's Briefing</h3>
-                                <span className="text-sm font-semibold text-gray-500 uppercase tracking-widest">{new Date(playlist.created_at).toLocaleDateString()}</span>
-                            </div>
-                            
+                        <div className="w-full flex flex-col items-center justify-center">
                             {/* Inject the Client Component Seamlessly */}
-                            <UnifiedAudioPlayer userId={userId} playlistUrls={playlist?.audio_urls || []} />
-                            
-                            <div className="mt-12 text-center text-gray-500/80 text-sm font-semibold tracking-widest uppercase">
-                                Curated from global headlines • Personalized specifically for you
-                            </div>
+                            <AudioPlayer userId={userId} tracks={mappedTracks} />
                         </div>
                     ) : (
                         <div className="w-full max-w-xl mx-auto bg-gray-900/40 border border-white/5 rounded-3xl p-12 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xl space-y-6 mt-16 group transition-all duration-500 hover:border-white/10 hover:bg-gray-900/60">

@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { AudioPlayerProvider, useAudioPlayer, AudioTrack } from '@/contexts/AudioPlayerContext';
-import FrequencyVisualizer from '@/components/FrequencyVisualizer';
+import LiquidOrb from '@/components/LiquidOrb';
 
 interface AudioPlayerProps {
     userId: string;
@@ -17,22 +17,8 @@ function AudioPlayerUI({ userId }: { userId: string }) {
         globalCurrentTime, 
         globalDuration, 
         currentIndex, 
-        tracks, 
-        playPause, 
-        skipNext, 
-        seekToPercentage,
-        skipForward10,
-        skipBackward10
+        tracks 
     } = useAudioPlayer();
-
-    const formatTime = (timeInSecs: number) => {
-        if (isNaN(timeInSecs) || !isFinite(timeInSecs)) return "0:00";
-        const m = Math.floor(timeInSecs / 60);
-        const s = Math.floor(timeInSecs % 60);
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
-    };
-
-    const progress = globalDuration > 0 ? (globalCurrentTime / globalDuration) * 100 : 0;
 
     // Telemetry Sync Hook - Transparently tracks when currentIndex changes natively from background hardware swaps
     const lastIndex = useRef(currentIndex);
@@ -83,23 +69,8 @@ function AudioPlayerUI({ userId }: { userId: string }) {
                 </h3>
             </div>
 
-            <div className="mb-8 group">
-                <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    value={isNaN(progress) ? 0 : progress}
-                    onChange={(e) => seekToPercentage(Number(e.target.value))}
-                    className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-cyan-400 focus:outline-none transition-all group-hover:h-3"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-2 font-semibold tracking-wider">
-                    <span>{formatTime(globalCurrentTime)}</span>
-                    <span>{formatTime(globalDuration)}</span>
-                </div>
-            </div>
-
             {/* Injected Next-Gen Interactive Analyser and Control Deck */}
-            <FrequencyVisualizer />
+            <LiquidOrb />
         </div>
     );
 }
