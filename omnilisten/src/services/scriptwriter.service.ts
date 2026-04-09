@@ -28,8 +28,8 @@ export async function getRelevantArticles(interestVector: number[]): Promise<any
     const { data: articles, error } = await supabaseServer
         .rpc('match_news_articles', {
             query_embedding: interestVector,
-            match_threshold: -2.0,
-            match_count: 3
+            match_threshold: 0.65,
+            match_count: 5
         });
 
     if (error || !articles || articles.length === 0) {

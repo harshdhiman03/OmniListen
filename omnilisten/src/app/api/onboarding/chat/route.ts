@@ -36,7 +36,7 @@ export async function POST(request: Request) {
                 { role: 'system', content: systemInstruction },
                 ...formattedHistory
             ],
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
         });
 
         // Return exactly what the UI component 'ChatOnboarding' expects

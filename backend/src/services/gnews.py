@@ -21,7 +21,7 @@ class GNewsIngestionService:
             "q": query,
             "lang": "en",
             "max": "10",
-            "sortby": "relevance",
+            "sortby": "publishedAt",
             "apikey": self.api_key
         }
         
