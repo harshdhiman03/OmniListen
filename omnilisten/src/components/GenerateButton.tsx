@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { generateOnDemandBriefing } from '../app/dashboard/actions';
+import DashboardRealtimeListener from './DashboardRealtimeListener';
 
 export default function GenerateButton({ userId }: { userId: string }) {
     const [loading, setLoading] = useState(false);
@@ -16,18 +17,27 @@ export default function GenerateButton({ userId }: { userId: string }) {
             const result = await generateOnDemandBriefing(userId);
             
             if (!result.success) {
-                setError(result.error || "Failed to generate briefing");
+                setError(result.error || "Failed to enqueue the background process");
+                setLoading(false); // We uniquely only stop loading if it natively fails!
             }
+            
+            // If it succeeds, we deliberately LEAVE loading=true!
+            // The DashboardRealtimeListener injected below will automatically poll the DB 
+            // and force the entire Server Component to re-render, organically unmounting this button 
+            // and sliding the audio player into view without us ever dropping the loading spinner!
+
         } catch (err) {
             console.error(err);
             setError("A fatal network error occurred");
-        } finally {
             setLoading(false);
-        }
+        } 
     }
 
     return (
         <div className="flex flex-col items-center justify-center gap-4">
+            {/* Invisible Async State Engine */}
+            <DashboardRealtimeListener userId={userId} isGenerating={loading} />
+
             <button 
                 onClick={handleGenerate} 
                 disabled={loading} 
@@ -39,7 +49,7 @@ export default function GenerateButton({ userId }: { userId: string }) {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Synthesizing AI Podcast... (≈30s)
+                        Job Queued. Compiling AI Podcast... 
                     </>
                 ) : (
                     <>

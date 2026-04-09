@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { genAI } from '@/lib/gemini';
+import Groq from 'groq-sdk';
+
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
+});
 
 export async function POST(request: Request) {
     try {
@@ -13,32 +17,30 @@ export async function POST(request: Request) {
             );
         }
 
-        // Format the UI's history array into the strict role properties Gemini expects
-        const formattedHistory = history.map((msg: any) => ({
-            role: msg.role === 'ai' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
+        let formattedHistory: any[] = history.map((msg: any) => ({
+            role: msg.role === 'ai' ? 'assistant' : 'user',
+            content: msg.content
         }));
 
-        const model = genAI.getGenerativeModel({ 
-            // Leveraging the blazing fast 2.5 flash model as requested for snappy conversational UI
-            model: "gemini-2.5-flash",
-            systemInstruction: "You are an excellent onboarding assistant for a personalized news radio app. Ask EXACTLY ONE short follow-up question to dig deeper into the user's stated interests. Keep it very friendly and concise."
-        });
-
-        // Split off the most recent user message from the historical context
-        const previousHistory = formattedHistory.slice(0, -1);
-        const lastMessage = formattedHistory[formattedHistory.length - 1].parts[0].text;
-
-        // Initialize the Gemini conversation state naturally
-        const chatSession = model.startChat({
-            history: previousHistory,
-        });
-
-        // Stream the message to the model
-        const result = await chatSession.sendMessage(lastMessage);
+        if (formattedHistory.length > 0 && formattedHistory[0].role === 'assistant') {
+            formattedHistory.unshift({
+                role: 'user',
+                content: "Hello OmniListen! Let's build my personalized news radio profile."
+            });
+        }
         
+        const systemInstruction = "You are an excellent onboarding assistant for a personalized news radio app. Ask EXACTLY ONE short follow-up question to dig deeper into the user's stated interests. Keep it very friendly and concise.";
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemInstruction },
+                ...formattedHistory
+            ],
+            model: 'llama-3.3-70b-versatile',
+        });
+
         // Return exactly what the UI component 'ChatOnboarding' expects
-        return NextResponse.json({ reply: result.response.text() });
+        return NextResponse.json({ reply: chatCompletion.choices[0]?.message?.content || "Excellent, anything else?" });
 
     } catch (error: any) {
         console.error("Chat Onboarding API error:", error);

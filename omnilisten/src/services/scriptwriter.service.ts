@@ -42,18 +42,19 @@ export async function getRelevantArticles(interestVector: number[]): Promise<any
     return articles;
 }
 
+import Groq from 'groq-sdk';
+
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
+});
+
 /**
- * Processes articles into a structured context string and prompts Gemini for a podcast script.
+ * Processes articles into a structured context string and prompts Groq LLaMA for a podcast script.
  */
 export async function generatePodcastScript(articles: any[]): Promise<string> {
     const contextString = articles.map((article: any, index: number) => {
         return `### Story ${index + 1}\nTitle: ${article.title}\nContent:\n${article.content}`;
     }).join('\n\n---\n\n');
-
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
-        systemInstruction: SCRIPTWRITER_SYSTEM_PROMPT
-    });
 
     const prompt = `Here are the top personalized news stories to discuss in today's podcast. Please process them into our script format:\n\n${contextString}
 
@@ -66,7 +67,13 @@ CRITICAL INSTRUCTIONS FOR AUDIO SYNTHESIS:
 6. DO NOT include speaker labels (like "Host:") or stage directions (like "(Intro music fades in)"). 
 7. Generate ONLY the exact words that should be spoken out loud by the voice engine.`;
 
-    
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    const chatCompletion = await groq.chat.completions.create({
+        messages: [
+            { role: 'system', content: SCRIPTWRITER_SYSTEM_PROMPT },
+            { role: 'user', content: prompt }
+        ],
+        model: 'llama-3.1-8b-instant',
+    });
+
+    return chatCompletion.choices[0]?.message?.content || "";
 }

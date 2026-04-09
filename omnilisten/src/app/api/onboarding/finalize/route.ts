@@ -27,8 +27,13 @@ export async function POST(request: Request) {
         // Falling back to the currently supported gemini-embedding-001 model for Node.js
         const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
         
-        // Pass the raw string directly! The SDK natively wraps this into the correct { parts: [] } schema securely.
-        const embedResult = await embeddingModel.embedContent(summaryParagraph);
+        const embedResult = await embeddingModel.embedContent({
+            content: {
+                role: "user",
+                parts: [{ text: summaryParagraph }]
+            },
+            outputDimensionality: 768
+        } as any);
         
         const embeddingVector = embedResult.embedding.values;
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { supabaseServer } from '@/lib/supabase';
-import AudioPlayer from '@/components/AudioPlayer';
+import UnifiedAudioPlayer from '@/components/UnifiedAudioPlayer';
 import GenerateButton from '@/components/GenerateButton';
 
 // Bypass aggressive static caching exclusively for the dashboard
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
                             </div>
                             
                             {/* Inject the Client Component Seamlessly */}
-                            <AudioPlayer userId={userId} tracks={mappedTracks} />
+                            <UnifiedAudioPlayer userId={userId} playlistUrls={playlist?.audio_urls || []} />
                             
                             <div className="mt-12 text-center text-gray-500/80 text-sm font-semibold tracking-widest uppercase">
                                 Curated from global headlines • Personalized specifically for you
