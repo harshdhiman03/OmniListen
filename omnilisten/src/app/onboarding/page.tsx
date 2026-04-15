@@ -4,14 +4,12 @@ import { supabaseServer } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 
 export default async function OnboardingPage() {
-    // Fetch Authenticated User Session (Mocked flawlessly for the MVP)
-    const { data: profileData } = await supabaseServer
-        .from('profiles')
-        .select('id')
-        .limit(1)
-        .single();
-        
-    const userId = profileData?.id;
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return null;
+    const userId = user.id;
 
     return (
         <div className="min-h-screen bg-gray-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white selection:bg-cyan-500/30">

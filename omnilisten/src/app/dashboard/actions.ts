@@ -1,15 +1,25 @@
 "use server";
 
+import { createClient } from '@/utils/supabase/server';
 import { supabaseServer } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 
 /**
  * Next.js 14 Server Action. 
  * Securely fires a message into the Supabase pgmq queue to asynchronously generate an audiobook.
- * Returns instantly to the client, entirely overriding the Vercel limits!
+ * Native Edge JWT extraction guarantees job queuing is completely immune to ID spoofing!
  */
-export async function generateOnDemandBriefing(userId: string) {
+export async function generateOnDemandBriefing(_clientSideId?: string) {
     try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            throw new Error("Unauthorized JWT Session");
+        }
+        
+        const userId = user.id;
+
         console.log(`[Server Action] Enqueueing audio generation job for user ${userId}...`);
         
         // Push message to the 'audio_jobs' queue utilizing our custom PostgreSQL wrapper function

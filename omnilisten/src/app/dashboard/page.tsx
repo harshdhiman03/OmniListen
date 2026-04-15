@@ -1,4 +1,5 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase';
 import AudioPlayer from '@/components/AudioPlayer';
 import GenerateButton from '@/components/GenerateButton';
@@ -7,28 +8,27 @@ import GenerateButton from '@/components/GenerateButton';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-    // 1. Fetch Authenticated User Session (Mocked flawlessly for the MVP)
-    // In a production app with fully baked Supabase Auth cookies: 
-    // const { data: { user } } = await supabaseServer.auth.getUser();
+    // 1. Fetch Authenticated User Session natively using standard SSR token decryption
+    const { createClient } = await import('@/utils/supabase/server');
+    const supabaseSession = await createClient();
+    const { data: { user } } = await supabaseSession.auth.getUser();
+
+    if (!user) {
+        // Edge middleware executes first, but this acts as a hard failsafe for SSR renders
+        return null;
+    }
     
+    // Strict Sandbox Query: Only fetch profiles associated precisely with the encrypted JWT identity!
     const { data: profileData, error: profileError } = await supabaseServer
         .from('profiles')
         .select('id, first_name')
+        .eq('id', user.id)
         .not('interest_vector', 'is', null)
-        .limit(1)
         .single();
 
-    // If zero profiles exist with onboarding data, intercept gracefully!
+    // If zero profiles exist with onboarding data for this specific user, intercept gracefully!
     if (!profileData) {
-        return (
-            <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-white font-sans">
-                <div className="w-20 h-20 mb-6 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
-                    <svg className="w-10 h-10 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                </div>
-                <h1 className="text-3xl font-extrabold mb-4 tracking-tight">No Active Profiles Detected</h1>
-                <p className="text-gray-400 text-lg">Please complete the AI Onboarding Chat initialization first!</p>
-            </div>
-        );
+        redirect('/onboarding');
     }
 
     const userId = profileData.id;

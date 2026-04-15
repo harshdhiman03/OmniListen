@@ -42,7 +42,10 @@ async function processQueue() {
                 try {
                     // Step 2: Extract User Intel
                     const interestVector = await getUserInterestVector(userId);
-                    if (!interestVector) throw new Error("Could not map a valid interest vector");
+                    if (!interestVector) {
+                        await publicSupabase.rpc('delete_audio_job', { p_msg_id: msgId });
+                        throw new Error("Could not map a valid interest vector, isolated orphaned job deleted.");
+                    }
 
                     // Step 3: Vector Knowledge Graph Retrieval
                     console.log(`[Job ${msgId}] Pulling latest relevant news matrix...`);
@@ -72,7 +75,11 @@ async function processQueue() {
                             audio_urls: publicUrls
                         });
 
-                    if (insertError) throw new Error(`Database Insert Failed: ${insertError.message}`);
+                    if (insertError) {
+                        console.error(`Database Insert Failed: ${insertError.message}. Aggressively pruning job to prevent infinite TTS billing loop.`);
+                        await publicSupabase.rpc('delete_audio_job', { p_msg_id: msgId });
+                        throw new Error(`Database Insert Failed: ${insertError.message}`);
+                    }
 
                     // Step 7: Delete message from queue gracefully to signal permanent success!
                     await publicSupabase.rpc('delete_audio_job', { p_msg_id: msgId });

@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { genAI } from '@/lib/gemini';
 import { supabaseServer } from '@/lib/supabase';
 
+// Inject Groq into the route explicitly
+import Groq from 'groq-sdk';
+
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY
+});
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -12,16 +19,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing chat history' }, { status: 400 });
         }
 
-        // 2. Synthesize History into an Analytical Block
+        // 2. Synthesize History into an Analytical Block natively via LLaMA (bypassing Google's rate limits)
         const conversationText = history.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
         
-        const summaryModel = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            systemInstruction: "You are an analytical AI data extractor. Read the attached onboarding conversation and summarize the user's core interests into a single, highly dense paragraph. Do not include introductory filler, just the dense summary of all discovered topics, industries, and hobbies."
+        const systemInstruction = "You are an analytical AI data extractor. Read the attached onboarding conversation and summarize the user's core interests into a single, highly dense paragraph. Do not include introductory filler, just the dense summary of all discovered topics, industries, and hobbies.";
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: conversationText }
+            ],
+            model: 'llama-3.1-8b-instant',
         });
 
-        const summaryResult = await summaryModel.generateContent(conversationText);
-        const summaryParagraph = summaryResult.response.text();
+        const summaryParagraph = chatCompletion.choices[0]?.message?.content || "General interests and world news";
 
         // 3. Transform Summary into a Semantic Vector
         // Falling back to the currently supported gemini-embedding-001 model for Node.js
@@ -41,19 +52,24 @@ export async function POST(request: Request) {
             throw new Error("Google GenAI failed to return an embedding vector");
         }
 
-        // 4. Upsert Profile Vector to Postgres using Service Role
-        if (user_id) {
+        // 4. Secure JWT verification mapping
+        const { createClient } = await import('@/utils/supabase/server');
+        const supabaseSession = await createClient();
+        const { data: { user } } = await supabaseSession.auth.getUser();
+
+        if (user) {
+            // Using Service Role specifically for vector insertion as it requires elevated permissions
+            // but we STRICTLY enforce it applies only to the verified JWT session Identity.
             const { error: dbError } = await supabaseServer
                 .from('profiles')
-                .update({ interest_vector: embeddingVector })
-                .eq('id', user_id);
+                .upsert({ id: user.id, first_name: "Agent Listener", interest_vector: embeddingVector });
 
             if (dbError) {
                 console.error("Supabase Database Update Failed:", dbError);
                 throw new Error(`Failed to commit vector to Profile: ${dbError.message}`);
             }
         } else {
-            console.warn("No user_id provided. Evaluated vector without saving to Supabase.");
+            return NextResponse.json({ error: 'Unauthorized Session' }, { status: 401 });
         }
 
         // 5. Final OK to FrontEnd
