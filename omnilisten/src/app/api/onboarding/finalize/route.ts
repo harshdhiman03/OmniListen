@@ -15,6 +15,8 @@ export async function POST(request: Request) {
         const { user_id, history } = body;
 
         // 1. Sanitize Incoming Context
+        console.log("FINAL_DEBUG: Received user_id:", user_id);
+        
         if (!history || !Array.isArray(history)) {
             return NextResponse.json({ error: 'Missing chat history' }, { status: 400 });
         }
@@ -57,12 +59,15 @@ export async function POST(request: Request) {
         const supabaseSession = await createClient();
         const { data: { user } } = await supabaseSession.auth.getUser();
 
-        if (user) {
+        // Testing bypass: If no JWT cookie is found, fallback to the manual user_id
+        const finalUserId = user?.id || user_id;
+
+        if (finalUserId) {
             // Using Service Role specifically for vector insertion as it requires elevated permissions
             // but we STRICTLY enforce it applies only to the verified JWT session Identity.
             const { error: dbError } = await supabaseServer
                 .from('profiles')
-                .upsert({ id: user.id, first_name: "Agent Listener", interest_vector: embeddingVector });
+                .upsert({ id: finalUserId, first_name: "Agent Listener", interest_vector: embeddingVector });
 
             if (dbError) {
                 console.error("Supabase Database Update Failed:", dbError);

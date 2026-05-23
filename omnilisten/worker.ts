@@ -52,7 +52,7 @@ async function processQueue() {
                     const articles = await getRelevantArticles(interestVector);
                     
                     // Step 4: AI Audio Scriptwriting
-                    console.log(`[Job ${msgId}] Drafting specialized audio script via Gemini...`);
+                    console.log(`[Job ${msgId}] Drafting specialized audio script via Groq LLaMA 3.1...`);
                     const scriptResponse = await generatePodcastScript(articles);
                     const chunks = segmentScriptIntoChunks(scriptResponse);
 

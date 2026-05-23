@@ -1,7 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase';
-import AudioPlayer from '@/components/AudioPlayer';
+import PlaylistSelector from '@/components/PlaylistSelector';
 import GenerateButton from '@/components/GenerateButton';
 
 // Bypass aggressive static caching exclusively for the dashboard
@@ -34,28 +34,13 @@ export default async function DashboardPage() {
     const userId = profileData.id;
     const userName = profileData.first_name || 'Listener';
 
-    // 2. Query today's generated compilation
-    // Calculate precise daily epoch boundaries natively
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-
-    const { data: playlist } = await supabaseServer
+    // 2. Query up to 3 days of generated compilations natively!
+    const { data: playlists } = await supabaseServer
         .from('daily_playlists')
         .select('audio_urls, created_at')
         .eq('user_id', userId)
-        .gte('created_at', today.toISOString())
-        .lt('created_at', tomorrow.toISOString())
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-    // The AudioPlayer securely expects `tracks: { url: string; articleId: number }[]`.
-    // We map strings directly to the object structure, injecting dummy ID 0 for the MVP telemetry standard!
-    const mappedTracks = playlist?.audio_urls 
-        ? playlist.audio_urls.map((url: string) => ({ url, articleId: 0 }))
-        : [];
+        .limit(3);
 
     return (
         <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-center overflow-hidden">
@@ -75,10 +60,10 @@ export default async function DashboardPage() {
                 </header>
 
                 <main className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 delay-150 relative z-10 flex-1">
-                    {playlist && mappedTracks.length > 0 ? (
+                    {playlists && playlists.length > 0 ? (
                         <div className="w-full flex flex-col items-center justify-center">
-                            {/* Inject the Client Component Seamlessly */}
-                            <AudioPlayer userId={userId} tracks={mappedTracks} />
+                            {/* Inject the Client Component Selector Seamlessly */}
+                            <PlaylistSelector userId={userId} playlists={playlists} />
                         </div>
                     ) : (
                         <div className="w-full max-w-xl mx-auto bg-gray-900/40 border border-white/5 rounded-3xl p-12 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xl space-y-6 mt-16 group transition-all duration-500 hover:border-white/10 hover:bg-gray-900/60">
