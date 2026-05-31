@@ -1,0 +1,22 @@
+{
+  "chat": {
+    "status": 200,
+    "body": "{\"reply\":\"That's fascinating.  How interested are you in learning more about the intersection or applications of those topics, such as quantum computing in electric vehicles or investing in the electric vehicle sector?\"}"
+  },
+  "finalize": {
+    "status": 200,
+    "body": "{\"success\":true,\"summary\":\"Quantum computing enthusiast with interest in applying its exponential processing power to optimize algorithmic trading models for global financial markets, where real-time data analysis leveraging machine learning techniques can identify high-growth opportunities, potentially integrating electric vehicle charging infrastructure investments with predictive market analytics, and exploring quantum-resistant cryptography for secure financial transactions.\"}"
+  },
+  "cron": {
+    "status": 200,
+    "body": "{\"status\":\"Job added to queue\"}"
+  },
+  "telemetry": {
+    "status": 200,
+    "body": "{\"success\":true}"
+  },
+  "playlist": {
+    "status": 200,
+    "body": "{\"exists\":true}"
+  }
+}

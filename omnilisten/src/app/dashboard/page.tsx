@@ -34,13 +34,13 @@ export default async function DashboardPage() {
     const userId = profileData.id;
     const userName = profileData.first_name || 'Listener';
 
-    // 2. Query up to 3 days of generated compilations natively!
+    // 2. Query generated compilations natively! We retrieve up to 15 entries to allow robust client-side deduplication by day.
     const { data: playlists } = await supabaseServer
         .from('daily_playlists')
         .select('audio_urls, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(3);
+        .limit(15);
 
     return (
         <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-center overflow-hidden">

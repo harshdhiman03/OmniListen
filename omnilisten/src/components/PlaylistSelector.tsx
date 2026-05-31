@@ -20,9 +20,6 @@ export default function PlaylistSelector({
     // Render nothing if absolute database zero
     if (!playlists || playlists.length === 0) return null;
 
-    const activePlaylist = playlists[activeIndex];
-    const mappedTracks = activePlaylist.audio_urls.map((url: string) => ({ url, articleId: 0 }));
-
     // Extract relative day labels ("Today", "Yesterday", "2 Days Ago") natively without moment.js
     const getRelativeDayLabel = (dateString: string) => {
         const target = new Date(dateString);
@@ -40,12 +37,33 @@ export default function PlaylistSelector({
         return target.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
 
+    // Filter/deduplicate playlists by their relative day label, keeping the latest one for each unique label
+    const filteredPlaylists: PlaylistRecord[] = [];
+    const seenLabels = new Set<string>();
+    for (const playlist of playlists) {
+        const label = getRelativeDayLabel(playlist.created_at);
+        if (!seenLabels.has(label)) {
+            seenLabels.add(label);
+            filteredPlaylists.push(playlist);
+        }
+    }
+
+    // Limit displayed playlists to at most 3 unique dates (Today and the 2 latest previous dates)
+    const displayedPlaylists = filteredPlaylists.slice(0, 3);
+
+    const activePlaylist = displayedPlaylists[activeIndex] || displayedPlaylists[0];
+    const mappedTracks = activePlaylist.audio_urls.map((url: string, idx: number) => ({
+        id: `${activePlaylist.created_at}-${idx}`,
+        url,
+        articleId: 0
+    }));
+
     return (
         <div className="w-full flex flex-col items-center justify-center">
             
             {/* The Historical Selector Ribbon */}
             <div className="flex space-x-2 bg-white/5 backdrop-blur-md border border-white/10 p-1.5 rounded-full mb-10 shadow-2xl relative z-20">
-                {playlists.map((playlist, index) => {
+                {displayedPlaylists.map((playlist, index) => {
                     const isActive = index === activeIndex;
                     return (
                         <button
