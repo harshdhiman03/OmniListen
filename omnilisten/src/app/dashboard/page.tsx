@@ -4,6 +4,7 @@ import { supabaseServer } from '@/lib/supabase';
 import PlaylistSelector from '@/components/PlaylistSelector';
 import GenerateButton from '@/components/GenerateButton';
 import LogoutButton from '@/components/LogoutButton';
+import LanguageSelector from '@/components/LanguageSelector';
 
 // Bypass aggressive static caching exclusively for the dashboard
 export const dynamic = 'force-dynamic';
@@ -20,9 +21,9 @@ export default async function DashboardPage() {
     }
     
     // Strict Sandbox Query: Only fetch profiles associated precisely with the encrypted JWT identity!
-    const { data: profileData, error: profileError } = await supabaseServer
+    const { data: profileData } = await supabaseServer
         .from('profiles')
-        .select('id, first_name')
+        .select('id, first_name, preferred_language')
         .eq('id', user.id)
         .not('interest_vector', 'is', null)
         .single();
@@ -34,21 +35,33 @@ export default async function DashboardPage() {
 
     const userId = profileData.id;
     const userName = profileData.first_name || 'Listener';
+    const currentLanguage = profileData.preferred_language || 'en';
 
-    // 2. Query generated compilations natively! We retrieve up to 15 entries to allow robust client-side deduplication by day.
+    // 2. Query generated compilations natively!
     const { data: playlists } = await supabaseServer
         .from('daily_playlists')
-        .select('audio_urls, created_at')
+        .select('id, audio_urls, audio_urls_by_lang, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(15);
+
+    const latestPlaylist = playlists && playlists.length > 0 ? playlists[0] : null;
+
+    // Dynamically override audio_urls if cached for user's preferred_language
+    const activePlaylists = (playlists || []).map((p: any) => {
+        const langMap = (p.audio_urls_by_lang as Record<string, string[]>) || {};
+        if (langMap[currentLanguage] && langMap[currentLanguage].length > 0) {
+            return { ...p, audio_urls: langMap[currentLanguage] };
+        }
+        return p;
+    });
 
     return (
         <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-center overflow-hidden">
             <div className="w-full max-w-4xl mx-auto px-8 relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
                 
                 {/* Dashboard Profile Header */}
-                <header className="flex items-center justify-between w-full max-w-2xl mb-12 animate-in fade-in slide-in-from-top-4 duration-700">
+                <header className="flex items-center justify-between w-full max-w-2xl mb-12 animate-in fade-in slide-in-from-top-4 duration-700 pt-6">
                     <div className="space-y-1">
                         <h1 className="text-3xl font-extrabold tracking-tight">
                             Good morning, <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">{userName}</span>
@@ -56,18 +69,22 @@ export default async function DashboardPage() {
                         <p className="text-sm text-gray-400 font-medium tracking-wide uppercase">Your daily briefing is ready</p>
                     </div>
                     <div className="flex items-center gap-4">
+                        <LanguageSelector 
+                            currentLanguage={currentLanguage} 
+                            activePlaylistId={latestPlaylist?.id} 
+                        />
                         <LogoutButton />
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-xl border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-lg border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
                             {userName.charAt(0).toUpperCase()}
                         </div>
                     </div>
                 </header>
 
                 <main className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 delay-150 relative z-10 flex-1">
-                    {playlists && playlists.length > 0 ? (
+                    {activePlaylists && activePlaylists.length > 0 ? (
                         <div className="w-full flex flex-col items-center justify-center">
                             {/* Inject the Client Component Selector Seamlessly */}
-                            <PlaylistSelector userId={userId} playlists={playlists} />
+                            <PlaylistSelector userId={userId} playlists={activePlaylists} />
                         </div>
                     ) : (
                         <div className="w-full max-w-xl mx-auto bg-gray-900/40 border border-white/5 rounded-3xl p-12 text-center shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xl space-y-6 mt-16 group transition-all duration-500 hover:border-white/10 hover:bg-gray-900/60">
@@ -76,7 +93,7 @@ export default async function DashboardPage() {
                             </div>
                             <h2 className="text-3xl font-extrabold tracking-tight">No Briefing Loaded for Today</h2>
                             <p className="text-gray-400 text-lg leading-relaxed max-w-md mx-auto">
-                                You either just securely completed onboarding, or the 4:00 AM background cron-job hasn't organically triggered yet!
+                                Select your preferred language above and click below to generate your personalized AI news podcast!
                             </p>
                             
                             <div className="pt-8 pb-2 w-full flex justify-center">

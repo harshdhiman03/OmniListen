@@ -1,9 +1,9 @@
 /**
  * Segments a long podcast script into digestible chunks (roughly 3 sentences each)
- * to prevent payload limits and optimize playback pacing.
+ * to prevent payload limits and optimize playback pacing. Supports Indic Purna Virama (।).
  */
 export function segmentScriptIntoChunks(script: string, maxSentencesPerChunk: number = 3): string[] {
-    const sentences = script.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [script];
+    const sentences = script.match(/[^.!?।]+[.!?।]+(?:\s|$)/g) || [script];
     
     const chunks: string[] = [];
     let currentChunk = "";
@@ -32,8 +32,8 @@ export function segmentScriptIntoChunks(script: string, maxSentencesPerChunk: nu
 function splitTextIntoSafeSubChunks(text: string, maxLength: number = 150): string[] {
     if (text.length <= maxLength) return [text];
     
-    // Split by commas, semicolons, dashes, or spaces
-    const parts = text.split(/(?<=[,;:\-\s])/);
+    // Split by commas, semicolons, dashes, Purna Virama, or spaces
+    const parts = text.split(/(?<=[,;:\-\।\s])/);
     const subChunks: string[] = [];
     let current = "";
 
@@ -54,19 +54,20 @@ function splitTextIntoSafeSubChunks(text: string, maxLength: number = 150): stri
 }
 
 /**
- * Fires HTTP requests for text sub-phrases to the Vercel-native TTS engine,
+ * Fires HTTP requests for text sub-phrases to the Vercel-native multi-lingual TTS engine,
  * concatenates all MP3 buffers, and returns the final binary MP3 Node Buffer.
- * 100% Free, zero API keys required, runs natively inside Vercel Serverless & Edge!
+ * Supports English ('en'), Hindi ('hi'), Tamil ('ta'), Telugu ('te'), Marathi ('mr'), Bengali ('bn'), etc.
  */
-export async function generateAudioBufferForChunk(text: string): Promise<Buffer> {
+export async function generateAudioBufferForChunk(text: string, languageCode: string = 'en'): Promise<Buffer> {
     try {
         const subChunks = splitTextIntoSafeSubChunks(text, 150);
         const audioBuffers: Buffer[] = [];
+        const lang = languageCode || 'en';
 
         for (const subChunk of subChunks) {
             if (!subChunk.trim()) continue;
 
-            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(subChunk.trim())}&tl=en&client=tw-ob`;
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(subChunk.trim())}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
             const response = await fetch(url, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
@@ -74,7 +75,7 @@ export async function generateAudioBufferForChunk(text: string): Promise<Buffer>
             });
 
             if (!response.ok) {
-                throw new Error(`TTS HTTP Request failed with status ${response.status}`);
+                throw new Error(`TTS HTTP Request failed with status ${response.status} for lang [${lang}]`);
             }
 
             const arrayBuffer = await response.arrayBuffer();

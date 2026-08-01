@@ -16,10 +16,10 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized calling cron identity' }, { status: 401 });
         }
 
-        // 1. Fetch Active Users with valid interest vectors
+        // 1. Fetch Active Users with valid interest vectors & preferred language
         const { data: users, error: profileError } = await supabaseServer
             .from('profiles')
-            .select('id, interest_vector')
+            .select('id, interest_vector, preferred_language')
             .not('interest_vector', 'is', null);
 
         if (profileError || !users) {
@@ -34,6 +34,7 @@ export async function GET(request: Request) {
             try {
                 const userId = user.id;
                 const interestVector = user.interest_vector;
+                const preferredLanguage = user.preferred_language || 'en';
 
                 if (!interestVector) continue;
 
@@ -41,14 +42,14 @@ export async function GET(request: Request) {
                 const articles = await getRelevantArticles(interestVector);
                 if (!articles || articles.length === 0) continue;
 
-                // Step 3: Write podcast script via Groq LLaMA
-                const scriptResponse = await generatePodcastScript(articles);
+                // Step 3: Write podcast script via Groq LLaMA in target language
+                const scriptResponse = await generatePodcastScript(articles, preferredLanguage);
                 const chunks = segmentScriptIntoChunks(scriptResponse);
 
-                // Step 4: Synthesize & Upload Audio Chunks
+                // Step 4: Synthesize & Upload Audio Chunks in target language
                 const publicUrls: string[] = [];
                 for (let i = 0; i < chunks.length; i++) {
-                    const audioBuffer = await generateAudioBufferForChunk(chunks[i]);
+                    const audioBuffer = await generateAudioBufferForChunk(chunks[i], preferredLanguage);
                     const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1);
                     publicUrls.push(url);
                 }
