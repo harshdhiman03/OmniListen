@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { getRelevantArticles, generatePodcastScript } from '@/services/scriptwriter.service';
+import { segmentScriptIntoChunks, generateAudioBufferForChunk } from '@/services/tts.service';
+import { uploadAudioChunk } from '@/services/storage.service';
 
-// Force Vercel to dynamically execute this script every run
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Allow up to 60s execution limit on Vercel
 
 export async function GET(request: Request) {
     try {
@@ -13,10 +16,10 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized calling cron identity' }, { status: 401 });
         }
 
-        // 1. Fetch Active Users
+        // 1. Fetch Active Users with valid interest vectors
         const { data: users, error: profileError } = await supabaseServer
             .from('profiles')
-            .select('id')
+            .select('id, interest_vector')
             .not('interest_vector', 'is', null);
 
         if (profileError || !users) {
@@ -24,21 +27,59 @@ export async function GET(request: Request) {
             throw new Error('Supabase Profile Fetch Error');
         }
 
+        const sessionDateId = new Date().toISOString().split('T')[0];
+        let processedCount = 0;
+
         for (const user of users) {
             try {
-                // Call the public wrapper to jump the hidden schema boundary natively within Postgres!
-                const { error: mqError } = await supabaseServer.rpc('enqueue_audio_job', { p_user_id: user.id });
+                const userId = user.id;
+                const interestVector = user.interest_vector;
 
-                if (mqError) {
-                    console.error(`[Cron] PGMQ mapping failed for user ${user.id}:`, mqError);
+                if (!interestVector) continue;
+
+                // Step 2: Retrieve matched news stories
+                const articles = await getRelevantArticles(interestVector);
+                if (!articles || articles.length === 0) continue;
+
+                // Step 3: Write podcast script via Groq LLaMA
+                const scriptResponse = await generatePodcastScript(articles);
+                const chunks = segmentScriptIntoChunks(scriptResponse);
+
+                // Step 4: Synthesize & Upload Audio Chunks
+                const publicUrls: string[] = [];
+                for (let i = 0; i < chunks.length; i++) {
+                    const audioBuffer = await generateAudioBufferForChunk(chunks[i]);
+                    const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1);
+                    publicUrls.push(url);
                 }
+
+                // Step 5: Insert Daily Playlist Record
+                const { error: insertError } = await supabaseServer
+                    .from('daily_playlists')
+                    .insert({
+                        user_id: userId,
+                        audio_urls: publicUrls
+                    });
+
+                if (!insertError) {
+                    processedCount++;
+                } else {
+                    console.error(`Failed to insert playlist for user ${userId}:`, insertError);
+                }
+
             } catch (err) {
-                console.error(`[Cron] Queue fatal error for user ${user.id}:`, err);
+                console.error(`Daily briefing error for user ${user.id}:`, err);
             }
         }
 
-        return NextResponse.json({ status: "Job added to queue" }, { status: 200 });
+        return NextResponse.json({ 
+            status: "Success", 
+            totalUsers: users.length, 
+            processedCount 
+        }, { status: 200 });
+
     } catch (error: any) {
+        console.error("Daily Briefing Cron Error:", error);
         return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
     }
 }

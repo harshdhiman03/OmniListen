@@ -1,18 +1,8 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { readFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { randomUUID } from 'crypto';
-
-const execFileAsync = promisify(execFile);
-
 /**
  * Segments a long podcast script into digestible chunks (roughly 3 sentences each)
- * to prevent TTS API timeouts and stay within payload limits.
+ * to prevent payload limits and optimize playback pacing.
  */
 export function segmentScriptIntoChunks(script: string, maxSentencesPerChunk: number = 3): string[] {
-    // Splits reliably by periods, exclamation marks, or question marks followed by spaces.
     const sentences = script.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [script];
     
     const chunks: string[] = [];
@@ -37,36 +27,71 @@ export function segmentScriptIntoChunks(script: string, maxSentencesPerChunk: nu
 }
 
 /**
- * Fires a request to Microsoft Edge TTS for a given chunk of text using high-quality neural voice (en-US-AvaNeural).
- * Returns the raw binary MP3 Node Buffer.
+ * Splits text into safe sub-phrases of <= 150 characters to prevent TTS 400 Bad Request errors.
+ */
+function splitTextIntoSafeSubChunks(text: string, maxLength: number = 150): string[] {
+    if (text.length <= maxLength) return [text];
+    
+    // Split by commas, semicolons, dashes, or spaces
+    const parts = text.split(/(?<=[,;:\-\s])/);
+    const subChunks: string[] = [];
+    let current = "";
+
+    for (const part of parts) {
+        if ((current + part).length > maxLength) {
+            if (current.trim()) subChunks.push(current.trim());
+            current = part;
+        } else {
+            current += part;
+        }
+    }
+
+    if (current.trim()) {
+        subChunks.push(current.trim());
+    }
+
+    return subChunks.length > 0 ? subChunks : [text.slice(0, maxLength)];
+}
+
+/**
+ * Fires HTTP requests for text sub-phrases to the Vercel-native TTS engine,
+ * concatenates all MP3 buffers, and returns the final binary MP3 Node Buffer.
+ * 100% Free, zero API keys required, runs natively inside Vercel Serverless & Edge!
  */
 export async function generateAudioBufferForChunk(text: string): Promise<Buffer> {
-    const tempAudioPath = join(tmpdir(), `omnilisten_tts_${randomUUID()}.mp3`);
-    
     try {
-        await execFileAsync('python', [
-            '-m', 'edge_tts',
-            '--voice', 'en-US-AvaNeural',
-            '--text', text,
-            '--write-media', tempAudioPath
-        ]);
+        const subChunks = splitTextIntoSafeSubChunks(text, 150);
+        const audioBuffers: Buffer[] = [];
 
-        const audioBuffer = await readFile(tempAudioPath);
-        
-        if (!audioBuffer || audioBuffer.length === 0) {
-            throw new Error("Edge TTS Error: Generated audio file is empty");
+        for (const subChunk of subChunks) {
+            if (!subChunk.trim()) continue;
+
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(subChunk.trim())}&tl=en&client=tw-ob`;
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`TTS HTTP Request failed with status ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            if (buffer && buffer.length > 0) {
+                audioBuffers.push(buffer);
+            }
         }
 
-        return audioBuffer;
+        if (audioBuffers.length === 0) {
+            throw new Error("TTS Error: Empty audio buffer generated");
+        }
 
+        return Buffer.concat(audioBuffers);
     } catch (err: any) {
-        console.error("Edge TTS Synthesis Failed:", err);
-        throw new Error(`Edge TTS Generation Error: ${err?.message || err}`);
-    } finally {
-        try {
-            await unlink(tempAudioPath);
-        } catch {
-            // Ignore cleanup error if temp file was never created
-        }
+        console.error("Vercel-Native TTS Synthesis Error:", err);
+        throw new Error(`Vercel TTS Generation Error: ${err?.message || err}`);
     }
 }
