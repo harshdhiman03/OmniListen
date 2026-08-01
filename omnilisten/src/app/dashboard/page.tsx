@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase';
 import PlaylistSelector from '@/components/PlaylistSelector';
 import GenerateButton from '@/components/GenerateButton';
+import LogoutButton from '@/components/LogoutButton';
 
 // Bypass aggressive static caching exclusively for the dashboard
 export const dynamic = 'force-dynamic';
@@ -54,8 +55,11 @@ export default async function DashboardPage() {
                         </h1>
                         <p className="text-sm text-gray-400 font-medium tracking-wide uppercase">Your daily briefing is ready</p>
                     </div>
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-xl border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
-                        {userName.charAt(0).toUpperCase()}
+                    <div className="flex items-center gap-4">
+                        <LogoutButton />
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-xl border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
+                            {userName.charAt(0).toUpperCase()}
+                        </div>
                     </div>
                 </header>
 

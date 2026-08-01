@@ -76,9 +76,10 @@ async function processQueue() {
                         });
 
                     if (insertError) {
-                        console.error(`Database Insert Failed: ${insertError.message}. Aggressively pruning job to prevent infinite TTS billing loop.`);
+                        console.error(`❌ [Job ${msgId}] Database Insert Failed: ${insertError.message}. Pruning job from PGMQ queue to prevent infinite synthesis retry loop.`);
                         await publicSupabase.rpc('delete_audio_job', { p_msg_id: msgId });
-                        throw new Error(`Database Insert Failed: ${insertError.message}`);
+                        console.timeEnd(`Job ${msgId} Execution Time`);
+                        continue;
                     }
 
                     // Step 7: Delete message from queue gracefully to signal permanent success!
@@ -89,16 +90,15 @@ async function processQueue() {
                     console.log(`======================================================\n`);
 
                 } catch (internalErr: any) {
-                    console.error(`❌ [Job ${msgId}] FATAL FAILED:`, internalErr);
+                    console.error(`❌ [Job ${msgId}] FATAL FAILED:`, internalErr?.stack || internalErr?.message || internalErr);
                     
                     // Production Resilience: Native handler for Gemini API Free Tier rate limits!
                     if (internalErr?.message?.includes('429 Too Many Requests') || internalErr?.status === 429) {
                         console.log(`⚠️ [Rate Limit Hit] Pausing the entire queue processor for 60 seconds to allow Google API quotas to natively reset...`);
                         await new Promise(resolve => setTimeout(resolve, 60000));
+                    } else {
+                        console.log(`⚠️ [Job ${msgId}] Non-rate-limit failure. Message visibility lock will expire in PGMQ for automatic retry.`);
                     }
-
-                    // We gracefully let the PGMQ visibility lock naturally expire (after 5 mins), 
-                    // which implicitly thrusts this job back into the queue to be retried automatically!
                 }
             } else {
                 // If queue is empty, sleep for 3 seconds

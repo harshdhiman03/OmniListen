@@ -63,11 +63,33 @@ export async function POST(request: Request) {
         const finalUserId = user?.id || user_id;
 
         if (finalUserId) {
+            // Dynamically resolve first_name from JWT metadata, existing DB profile, email handle, or fallback 'Listener'
+            let firstName = user?.user_metadata?.first_name;
+            if (!firstName) {
+                const { data: existingProfile } = await supabaseServer
+                    .from('profiles')
+                    .select('first_name')
+                    .eq('id', finalUserId)
+                    .maybeSingle();
+                firstName = existingProfile?.first_name;
+            }
+            if (!firstName && user?.email) {
+                firstName = user.email.split('@')[0];
+            }
+            if (!firstName) {
+                firstName = "Listener";
+            }
+
             // Using Service Role specifically for vector insertion as it requires elevated permissions
             // but we STRICTLY enforce it applies only to the verified JWT session Identity.
             const { error: dbError } = await supabaseServer
                 .from('profiles')
-                .upsert({ id: finalUserId, first_name: "Agent Listener", interest_vector: embeddingVector });
+                .upsert({ 
+                    id: finalUserId, 
+                    first_name: firstName, 
+                    interest_summary: summaryParagraph,
+                    interest_vector: embeddingVector 
+                });
 
             if (dbError) {
                 console.error("Supabase Database Update Failed:", dbError);

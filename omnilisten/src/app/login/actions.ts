@@ -26,11 +26,20 @@ export async function signup(formData: FormData) {
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
+  const firstName = (formData.get('first_name') as string || '').trim()
 
-  const { error } = await supabase.auth.signUp({ email, password })
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        first_name: firstName || email.split('@')[0],
+      }
+    }
+  })
 
   if (error) {
-    redirect(`/login?message=${error.message}`)
+    redirect(`/login?message=${encodeURIComponent(error.message)}`)
   }
 
   revalidatePath('/', 'layout')

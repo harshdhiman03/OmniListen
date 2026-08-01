@@ -25,6 +25,7 @@ interface AudioPlayerContextType {
     playbackRate: number;
     setSpeed: (rate: number) => void;
     analyser: AnalyserNode | null;
+    stopAll: () => void;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextType | null>(null);
@@ -34,6 +35,7 @@ export function AudioPlayerProvider({ children, initialTracks }: { children: Rea
     const playerB = useRef<HTMLAudioElement | null>(null);
     const audioContext = useRef<AudioContext | null>(null);
     const analyser = useRef<AnalyserNode | null>(null);
+    const [analyserState, setAnalyserState] = useState<AnalyserNode | null>(null);
     const audioGraphInitialized = useRef(false);
 
     const [isPlaying, setIsPlaying] = useState(false);
@@ -236,6 +238,7 @@ export function AudioPlayerProvider({ children, initialTracks }: { children: Rea
             audioContext.current = new window.AudioContext();
             analyser.current = audioContext.current.createAnalyser();
             analyser.current.fftSize = 2048;
+            setAnalyserState(analyser.current);
 
             const sourceA = audioContext.current.createMediaElementSource(playerA.current!);
             const sourceB = audioContext.current.createMediaElementSource(playerB.current!);
@@ -268,6 +271,19 @@ export function AudioPlayerProvider({ children, initialTracks }: { children: Rea
         }
     };
 
+    const stopAll = () => {
+        if (playerA.current) {
+            playerA.current.pause();
+            playerA.current.src = "";
+        }
+        if (playerB.current) {
+            playerB.current.pause();
+            playerB.current.src = "";
+        }
+        setIsPlaying(false);
+        setGlobalCurrentTime(0);
+    };
+
     return (
         <AudioPlayerContext.Provider
             value={{
@@ -285,7 +301,8 @@ export function AudioPlayerProvider({ children, initialTracks }: { children: Rea
                 skipBackward10,
                 playbackRate,
                 setSpeed,
-                analyser: analyser.current
+                analyser: analyserState || analyser.current,
+                stopAll
             }}
         >
             {children}

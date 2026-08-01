@@ -16,6 +16,17 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
 
         <form className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
+            <label className="text-sm text-gray-400 font-medium" htmlFor="first_name">Agent Name (First Name)</label>
+            <input 
+                id="first_name" 
+                name="first_name" 
+                type="text" 
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 transition-all"
+                placeholder="Alex"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
             <label className="text-sm text-gray-400 font-medium" htmlFor="email">Encrypted Node (Email)</label>
             <input 
                 id="email" 

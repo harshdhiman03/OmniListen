@@ -1,14 +1,11 @@
-import textToSpeech from '@google-cloud/text-to-speech';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { readFile, unlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 
-// Initialize the client with explicit credentials
-const client = new textToSpeech.TextToSpeechClient({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    // Vercel and .env files often escape the newline characters. 
-    // The .replace() function is crucial to format the RSA key correctly.
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  }
-});
+const execFileAsync = promisify(execFile);
 
 /**
  * Segments a long podcast script into digestible chunks (roughly 3 sentences each)
@@ -40,24 +37,36 @@ export function segmentScriptIntoChunks(script: string, maxSentencesPerChunk: nu
 }
 
 /**
- * Fires a request to the Google Cloud Text-to-Speech API for a given chunk of text.
+ * Fires a request to Microsoft Edge TTS for a given chunk of text using high-quality neural voice (en-US-AvaNeural).
  * Returns the raw binary MP3 Node Buffer.
  */
 export async function generateAudioBufferForChunk(text: string): Promise<Buffer> {
-    const request = {
-        input: { text },
-        // En-US-Journey voices are generally phenomenal for podcast pacing.
-        voice: { languageCode: 'en-US', name: 'en-US-Journey-F' }, 
-        // as const is needed for typescript to recognize the specific enum value
-        audioConfig: { audioEncoding: 'MP3' as const }
-    };
+    const tempAudioPath = join(tmpdir(), `omnilisten_tts_${randomUUID()}.mp3`);
+    
+    try {
+        await execFileAsync('python', [
+            '-m', 'edge_tts',
+            '--voice', 'en-US-AvaNeural',
+            '--text', text,
+            '--write-media', tempAudioPath
+        ]);
 
-    const [response] = await client.synthesizeSpeech(request);
+        const audioBuffer = await readFile(tempAudioPath);
+        
+        if (!audioBuffer || audioBuffer.length === 0) {
+            throw new Error("Edge TTS Error: Generated audio file is empty");
+        }
 
-    if (!response.audioContent) {
-        throw new Error("Google TTS API Error: No audio content was returned");
+        return audioBuffer;
+
+    } catch (err: any) {
+        console.error("Edge TTS Synthesis Failed:", err);
+        throw new Error(`Edge TTS Generation Error: ${err?.message || err}`);
+    } finally {
+        try {
+            await unlink(tempAudioPath);
+        } catch {
+            // Ignore cleanup error if temp file was never created
+        }
     }
-
-    // audioContent is a Uint8Array or Buffer naturally in this SDK
-    return Buffer.from(response.audioContent);
 }
