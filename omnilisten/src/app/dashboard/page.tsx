@@ -57,30 +57,44 @@ export default async function DashboardPage() {
     });
 
     return (
-        <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-center overflow-hidden">
-            <div className="w-full max-w-4xl mx-auto px-8 relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
+        <div className="min-h-screen bg-transparent bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black text-white font-sans selection:bg-cyan-500/30 font-inter flex flex-col items-center justify-start overflow-x-hidden">
+            <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative min-h-screen flex flex-col items-center">
                 
-                {/* Dashboard Profile Header */}
-                <header className="flex items-center justify-between w-full max-w-2xl mb-12 animate-in fade-in slide-in-from-top-4 duration-700 pt-6">
-                    <div className="space-y-1">
-                        <h1 className="text-3xl font-extrabold tracking-tight">
-                            Good morning, <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">{userName}</span>
+                {/* Production-Ready Liquid Glassmorphic Header Component */}
+                <header className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pt-8 pb-6 mb-8 border-b border-white/5 animate-in fade-in slide-in-from-top-4 duration-700">
+                    
+                    {/* 1. Typographic Hierarchy (Left Side) */}
+                    <div className="flex flex-col space-y-1">
+                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-none text-white">
+                            Good morning,{" "}
+                            <span className="bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+                                {userName}
+                            </span>
                         </h1>
-                        <p className="text-sm text-gray-400 font-medium tracking-wide uppercase">Your daily briefing is ready</p>
+                        <p className="text-xs font-bold text-zinc-400/80 uppercase tracking-widest pt-0.5">
+                            YOUR DAILY BRIEFING IS READY
+                        </p>
                     </div>
-                    <div className="flex items-center gap-4">
+
+                    {/* 2. Utility Navigation (Right Side) */}
+                    <div className="flex items-center gap-3 sm:gap-4 self-end sm:self-auto">
                         <LanguageSelector 
                             currentLanguage={currentLanguage} 
                             activePlaylistId={latestPlaylist?.id} 
                         />
+                        
                         <LogoutButton />
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 flex items-center justify-center font-bold text-lg border border-gray-800 ring-2 ring-white/10 text-white transform hover:scale-105 transition-transform duration-300">
-                            {userName.charAt(0).toUpperCase()}
+                        
+                        {/* Sophisticated Glassmorphic Profile Avatar */}
+                        <div className="relative group cursor-pointer">
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-tr from-cyan-500/20 to-blue-600/30 border border-cyan-500/30 shadow-[0_0_18px_rgba(6,182,212,0.25)] ring-2 ring-white/10 flex items-center justify-center font-bold text-sm sm:text-base text-cyan-300 transform group-hover:scale-105 group-hover:shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all duration-300">
+                                {userName.charAt(0).toUpperCase()}
+                            </div>
                         </div>
                     </div>
                 </header>
 
-                <main className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 delay-150 relative z-10 flex-1">
+                <main className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 delay-150 relative z-10 flex-1 pb-16">
                     {activePlaylists && activePlaylists.length > 0 ? (
                         <div className="w-full flex flex-col items-center justify-center">
                             {/* Inject the Client Component Selector Seamlessly */}

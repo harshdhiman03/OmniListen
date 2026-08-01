@@ -61,18 +61,18 @@ export default function PlaylistSelector({
     return (
         <div className="w-full flex flex-col items-center justify-center">
             
-            {/* The Historical Selector Ribbon */}
-            <div className="flex space-x-2 bg-white/5 backdrop-blur-md border border-white/10 p-1.5 rounded-full mb-10 shadow-2xl relative z-20">
+            {/* Sleek Glassmorphic Historical Sub-Navigation Tab Bar */}
+            <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-xl border border-white/10 p-1.5 rounded-full mb-10 shadow-2xl shadow-black/40 relative z-20">
                 {displayedPlaylists.map((playlist, index) => {
                     const isActive = index === activeIndex;
                     return (
                         <button
                             key={playlist.created_at}
                             onClick={() => setActiveIndex(index)}
-                            className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                            className={`px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 ${
                                 isActive 
-                                ? 'bg-cyan-500/20 text-cyan-300 shadow-[inset_0_0_15px_rgba(6,182,212,0.2)] border border-cyan-400/30' 
-                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
+                                ? 'bg-gradient-to-r from-cyan-500/25 to-blue-500/25 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.25)] border border-cyan-400/40 ring-1 ring-cyan-400/20' 
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] border border-transparent'
                             }`}
                         >
                             {getRelativeDayLabel(playlist.created_at)}

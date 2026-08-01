@@ -8,8 +8,7 @@ import { motion } from 'framer-motion';
 
 /**
  * Production-ready Glassmorphic Logout Button Component.
- * Integrates secure Supabase authentication teardown, active audio engine cleanup,
- * localStorage/sessionStorage purges, and native Next.js router transitions.
+ * Unified glassmorphic styling (bg-white/[0.04], backdrop-blur-md, border border-white/10).
  */
 export default function LogoutButton() {
     const router = useRouter();
@@ -34,20 +33,16 @@ export default function LogoutButton() {
             ]);
 
         } catch (error) {
-            console.error("Auth teardown network warning, executing aggressive offline purge:", error);
+            console.error("Auth teardown network warning, executing offline purge:", error);
         } finally {
-            // 3. Robust Offline Teardown Failsafe (always executes)
+            // 3. Offline Teardown Failsafe
             try {
                 if (typeof window !== 'undefined') {
-                    // Wipe OAuth tokens, session states, and cached profiles
                     localStorage.clear();
                     sessionStorage.clear();
-
-                    // Optional: Clear client cookies specifically related to auth
                     document.cookie.split(";").forEach((cookie) => {
                         const eqPos = cookie.indexOf("=");
                         const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
-                        // Nuke cookie
                         document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
                     });
                 }
@@ -65,24 +60,23 @@ export default function LogoutButton() {
         <motion.button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            whileHover={{ scale: 1.04, backgroundColor: "rgba(239, 68, 68, 0.08)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+            whileHover={{ scale: 1.04, backgroundColor: "rgba(239, 68, 68, 0.12)", borderColor: "rgba(239, 68, 68, 0.35)" }}
             whileTap={{ scale: 0.96 }}
             className={`
-                flex items-center gap-2.5 px-4 py-2 text-sm font-medium tracking-wide
-                text-gray-400 hover:text-red-400
-                bg-white/[0.03] hover:bg-red-500/[0.08]
-                backdrop-blur-md border border-white/5 hover:border-red-500/20
+                flex items-center gap-2 px-3.5 py-2 text-xs font-semibold tracking-wide
+                text-zinc-300 hover:text-red-400
+                bg-white/[0.04] hover:bg-red-500/10
+                backdrop-blur-md border border-white/10 hover:border-red-500/30
                 rounded-full shadow-lg shadow-black/20
-                transition-colors duration-300 select-none
-                focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-black
+                transition-all duration-300 select-none
+                focus:outline-none focus:ring-2 focus:ring-red-500/40
                 ${isLoggingOut ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
             `}
             title="Sign Out"
         >
             {isLoggingOut ? (
-                // Smooth Glassmorphic Spinner
                 <svg 
-                    className="animate-spin h-4.5 w-4.5 text-red-400" 
+                    className="animate-spin h-3.5 w-3.5 text-red-400" 
                     fill="none" 
                     viewBox="0 0 24 24"
                     aria-label="Logging out spinner"
@@ -91,9 +85,8 @@ export default function LogoutButton() {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
             ) : (
-                // Minimalist Box-Arrow-Right/Logout Icon
                 <svg 
-                    className="w-4.5 h-4.5" 
+                    className="w-3.5 h-3.5" 
                     fill="none" 
                     stroke="currentColor" 
                     strokeWidth="2" 
