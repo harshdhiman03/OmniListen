@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60s execution limit on Vercel
 
 export async function GET(request: Request) {
+    const startTime = Date.now();
     try {
         const authHeader = request.headers.get('authorization');
         
@@ -50,16 +51,19 @@ export async function GET(request: Request) {
                 const publicUrls: string[] = [];
                 for (let i = 0; i < chunks.length; i++) {
                     const audioBuffer = await generateAudioBufferForChunk(chunks[i], preferredLanguage);
-                    const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1);
+                    const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1, preferredLanguage);
                     publicUrls.push(url);
                 }
 
-                // Step 5: Insert Daily Playlist Record
+                // Step 5: Insert Daily Playlist Record with audio_urls_by_lang cache map
+                const initialCache = { [preferredLanguage]: publicUrls };
                 const { error: insertError } = await supabaseServer
                     .from('daily_playlists')
                     .insert({
                         user_id: userId,
-                        audio_urls: publicUrls
+                        audio_urls: publicUrls,
+                        script_text: scriptResponse,
+                        audio_urls_by_lang: initialCache
                     });
 
                 if (!insertError) {
@@ -73,14 +77,42 @@ export async function GET(request: Request) {
             }
         }
 
-        return NextResponse.json({ 
+        const executionTimeMs = Date.now() - startTime;
+        const resultPayload = { 
             status: "Success", 
             totalUsers: users.length, 
             processedCount 
-        }, { status: 200 });
+        };
+
+        // Write persistent audit log into Supabase cron_logs table (safe wrapper)
+        try {
+            await supabaseServer.from('cron_logs').insert({
+                cron_name: 'daily-briefing',
+                status: 'Success',
+                details: resultPayload,
+                execution_time_ms: executionTimeMs
+            });
+        } catch (logErr) {
+            console.warn("Failed to write cron_logs entry:", logErr);
+        }
+
+        return NextResponse.json(resultPayload, { status: 200 });
 
     } catch (error: any) {
+        const executionTimeMs = Date.now() - startTime;
         console.error("Daily Briefing Cron Error:", error);
+
+        try {
+            await supabaseServer.from('cron_logs').insert({
+                cron_name: 'daily-briefing',
+                status: 'Error',
+                details: { error: error.message || "Internal Server Error" },
+                execution_time_ms: executionTimeMs
+            });
+        } catch (logErr) {
+            console.warn("Failed to write error to cron_logs:", logErr);
+        }
+
         return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
     }
 }

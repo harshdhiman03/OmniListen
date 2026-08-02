@@ -8,6 +8,7 @@ import { genAI } from '@/lib/gemini';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    const startTime = Date.now();
     try {
         const authHeader = request.headers.get('authorization');
         
@@ -48,7 +49,6 @@ export async function GET(request: Request) {
         });
 
         // 4. Generate the optimized Boolean search queries using generateText 
-        // since llama-3.1-8b-instant does not support structured output schemas natively.
         const { text } = await generateText({
             model: groq('llama-3.1-8b-instant'),
             system: `You are a News Director. Your task is to read the combined user interests provided and group them into a maximum of 15 highly optimized Boolean search queries using the OR operator (e.g., "Quantum Computing" OR "Artificial Intelligence").
@@ -65,7 +65,6 @@ export async function GET(request: Request) {
         // 5. Parse and validate the response
         let parsedData;
         try {
-            // Strip potential markdown code blocks if the model incorrectly adds them
             const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
             parsedData = JSON.parse(cleanText);
         } catch (e) {
@@ -73,7 +72,6 @@ export async function GET(request: Request) {
         }
 
         const validatedObject = NewsQueriesSchema.parse(parsedData);
-
         console.log("Generated News Queries:", validatedObject.queries);
 
         // 6. GNews API Integration
@@ -212,17 +210,45 @@ export async function GET(request: Request) {
             insertedCount = articlesToInsert.length;
         }
 
-        return NextResponse.json({ 
+        const executionTimeMs = Date.now() - startTime;
+        const resultPayload = {
             status: "Success",
             queries: validatedObject.queries,
             totalRawCount: allRawArticles.length,
             deduplicatedCount: deduplicatedArticles.length,
             trulyNewCount: trulyNewArticles.length,
             insertedCount: insertedCount
-        }, { status: 200 });
+        };
+
+        // Write persistent audit log into Supabase cron_logs table (safe wrapper)
+        try {
+            await supabaseServer.from('cron_logs').insert({
+                cron_name: 'ingest-news',
+                status: 'Success',
+                details: resultPayload,
+                execution_time_ms: executionTimeMs
+            });
+        } catch (logErr) {
+            console.warn("Failed to write cron_logs entry:", logErr);
+        }
+
+        return NextResponse.json(resultPayload, { status: 200 });
 
     } catch (error: any) {
+        const executionTimeMs = Date.now() - startTime;
         console.error("Cron Ingest News Error:", error);
+
+        try {
+            await supabaseServer.from('cron_logs').insert({
+                cron_name: 'ingest-news',
+                status: 'Error',
+                details: { error: error.message || "Internal Server Error" },
+                execution_time_ms: executionTimeMs
+            });
+        } catch (logErr) {
+            console.warn("Failed to write error to cron_logs:", logErr);
+        }
+
         return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
     }
 }
