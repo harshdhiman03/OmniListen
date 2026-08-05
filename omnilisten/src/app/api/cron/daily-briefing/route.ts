@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { getRelevantArticles, generatePodcastScript } from '@/services/scriptwriter.service';
-import { segmentScriptIntoChunks, generateAudioBufferForChunk } from '@/services/tts.service';
-import { uploadAudioChunk } from '@/services/storage.service';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow up to 60s execution limit on Vercel
 
+/**
+ * Senior Architect Async Fan-Out Controller Route.
+ * Fetches all active users and dispatches non-blocking async worker jobs per user.
+ * Responds in < 300ms, eliminating Vercel 60s HTTP timeout crashes at scale.
+ */
 export async function GET(request: Request) {
     const startTime = Date.now();
     try {
@@ -17,10 +18,10 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized calling cron identity' }, { status: 401 });
         }
 
-        // 1. Fetch Active Users with valid interest vectors & preferred language
+        // 1. Query active users with valid interest vectors
         const { data: users, error: profileError } = await supabaseServer
             .from('profiles')
-            .select('id, interest_vector, preferred_language')
+            .select('id')
             .not('interest_vector', 'is', null);
 
         if (profileError || !users) {
@@ -28,69 +29,40 @@ export async function GET(request: Request) {
             throw new Error('Supabase Profile Fetch Error');
         }
 
-        const sessionDateId = new Date().toISOString().split('T')[0];
-        let processedCount = 0;
+        const origin = new URL(request.url).origin;
+        const cronSecret = process.env.CRON_SECRET || '';
 
-        for (const user of users) {
+        // 2. Dispatch non-blocking async worker calls for each user (Fan-Out)
+        const workerDispatches = users.map(async (user) => {
+            const workerUrl = `${origin}/api/cron/process-user-briefing?userId=${user.id}`;
             try {
-                const userId = user.id;
-                const interestVector = user.interest_vector;
-                const preferredLanguage = user.preferred_language || 'en';
-
-                if (!interestVector) continue;
-
-                // Step 2: Retrieve matched news stories with deduplication filter
-                const articles = await getRelevantArticles(interestVector, userId);
-                if (!articles || articles.length === 0) continue;
-
-                const articleIds = articles.map(a => Number(a.id)).filter(Boolean);
-
-                // Step 3: Write podcast script via Groq LLaMA in target language
-                const scriptResponse = await generatePodcastScript(articles, preferredLanguage);
-                const chunks = segmentScriptIntoChunks(scriptResponse);
-
-                // Step 4: Synthesize & Upload Audio Chunks in target language
-                const publicUrls: string[] = [];
-                for (let i = 0; i < chunks.length; i++) {
-                    const audioBuffer = await generateAudioBufferForChunk(chunks[i], preferredLanguage);
-                    const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1, preferredLanguage);
-                    publicUrls.push(url);
-                }
-
-                // Step 5: Insert Daily Playlist Record with audio_urls_by_lang cache map and article_ids bookmarks
-                const initialCache = { [preferredLanguage]: publicUrls };
-                const { error: insertError } = await supabaseServer
-                    .from('daily_playlists')
-                    .insert({
-                        user_id: userId,
-                        audio_urls: publicUrls,
-                        script_text: scriptResponse,
-                        audio_urls_by_lang: initialCache,
-                        article_ids: articleIds
-                    });
-
-                if (!insertError) {
-                    processedCount++;
-                } else {
-                    console.error(`Failed to insert playlist for user ${userId}:`, insertError);
-                }
-
+                // Non-blocking fetch to worker endpoint
+                fetch(workerUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${cronSecret}`
+                    }
+                }).catch(err => console.error(`Async fan-out error for user ${user.id}:`, err));
             } catch (err) {
-                console.error(`Daily briefing error for user ${user.id}:`, err);
+                console.error(`Fan-out dispatch error for user ${user.id}:`, err);
             }
-        }
+        });
+
+        // Trigger dispatches asynchronously without blocking the response
+        Promise.allSettled(workerDispatches);
 
         const executionTimeMs = Date.now() - startTime;
         const resultPayload = { 
             status: "Success", 
             totalUsers: users.length, 
-            processedCount 
+            fanoutDispatched: true,
+            executionTimeMs
         };
 
-        // Write persistent audit log into Supabase cron_logs table (safe wrapper)
+        // Write persistent audit log into Supabase cron_logs table
         try {
             await supabaseServer.from('cron_logs').insert({
-                cron_name: 'daily-briefing',
+                cron_name: 'daily-briefing-fanout',
                 status: 'Success',
                 details: resultPayload,
                 execution_time_ms: executionTimeMs
@@ -103,11 +75,11 @@ export async function GET(request: Request) {
 
     } catch (error: any) {
         const executionTimeMs = Date.now() - startTime;
-        console.error("Daily Briefing Cron Error:", error);
+        console.error("Daily Briefing Fan-Out Error:", error);
 
         try {
             await supabaseServer.from('cron_logs').insert({
-                cron_name: 'daily-briefing',
+                cron_name: 'daily-briefing-fanout',
                 status: 'Error',
                 details: { error: error.message || "Internal Server Error" },
                 execution_time_ms: executionTimeMs
