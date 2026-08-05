@@ -39,9 +39,11 @@ export async function GET(request: Request) {
 
                 if (!interestVector) continue;
 
-                // Step 2: Retrieve matched news stories
-                const articles = await getRelevantArticles(interestVector);
+                // Step 2: Retrieve matched news stories with deduplication filter
+                const articles = await getRelevantArticles(interestVector, userId);
                 if (!articles || articles.length === 0) continue;
+
+                const articleIds = articles.map(a => Number(a.id)).filter(Boolean);
 
                 // Step 3: Write podcast script via Groq LLaMA in target language
                 const scriptResponse = await generatePodcastScript(articles, preferredLanguage);
@@ -55,7 +57,7 @@ export async function GET(request: Request) {
                     publicUrls.push(url);
                 }
 
-                // Step 5: Insert Daily Playlist Record with audio_urls_by_lang cache map
+                // Step 5: Insert Daily Playlist Record with audio_urls_by_lang cache map and article_ids bookmarks
                 const initialCache = { [preferredLanguage]: publicUrls };
                 const { error: insertError } = await supabaseServer
                     .from('daily_playlists')
@@ -63,7 +65,8 @@ export async function GET(request: Request) {
                         user_id: userId,
                         audio_urls: publicUrls,
                         script_text: scriptResponse,
-                        audio_urls_by_lang: initialCache
+                        audio_urls_by_lang: initialCache,
+                        article_ids: articleIds
                     });
 
                 if (!insertError) {

@@ -76,9 +76,9 @@ export async function translateAndSynthesizePlaylist(playlistId: string, targetL
 
         const sessionDateId = new Date(playlist.created_at || Date.now()).toISOString().split('T')[0];
 
-        // 3. Fetch matched news articles using user vector
+        // 3. Fetch matched news articles using user vector and deduplication filter
         const { vector: interestVector } = await getUserInterestVectorAndLanguage(userId);
-        const articles = await getRelevantArticles(interestVector);
+        const articles = await getRelevantArticles(interestVector, userId);
 
         // 4. Draft translated podcast script in target language
         const scriptResponse = await generatePodcastScript(articles, targetLanguage);
@@ -141,11 +141,13 @@ export async function generateOnDemandBriefing(_clientSideId?: string) {
 
         console.log(`[Server Action] Synthesizing briefing in language: [${preferredLanguage}]`);
 
-        // 2. Retrieve matched news stories
-        const articles = await getRelevantArticles(interestVector);
+        // 2. Retrieve matched news stories with deduplication filter
+        const articles = await getRelevantArticles(interestVector, userId);
         if (!articles || articles.length === 0) {
             throw new Error("No matching news articles found. Please try ingesting news first.");
         }
+
+        const articleIds = articles.map(a => Number(a.id)).filter(Boolean);
 
         // 3. Draft script in target language
         const scriptResponse = await generatePodcastScript(articles, preferredLanguage);
@@ -159,7 +161,7 @@ export async function generateOnDemandBriefing(_clientSideId?: string) {
             publicUrls.push(url);
         }
 
-        // 5. Insert Playlist Record with audio_urls_by_lang cache map
+        // 5. Insert Playlist Record with audio_urls_by_lang cache map and article_ids bookmarks
         const initialCache = { [preferredLanguage]: publicUrls };
         const { error: insertError } = await supabaseServer
             .from('daily_playlists')
@@ -167,7 +169,8 @@ export async function generateOnDemandBriefing(_clientSideId?: string) {
                 user_id: userId,
                 audio_urls: publicUrls,
                 script_text: scriptResponse,
-                audio_urls_by_lang: initialCache
+                audio_urls_by_lang: initialCache,
+                article_ids: articleIds
             });
 
         if (insertError) {

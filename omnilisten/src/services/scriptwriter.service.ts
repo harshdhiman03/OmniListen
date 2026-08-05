@@ -51,16 +51,42 @@ export async function getUserInterestVector(userId: string): Promise<number[]> {
 }
 
 /**
- * Senior Architect Recency-Weighted Vector Search:
- * Retrieves news articles using vector similarity combined with exponential time-decay scoring.
- * Prioritizes fresh news published within the last 48 hours.
+ * Senior Architect Recency-Weighted & Bookmarked Vector Search:
+ * Retrieves news articles using vector similarity combined with exponential time-decay scoring,
+ * while strictly excluding any articles previously consumed by the user in recent playlists.
  */
-export async function getRelevantArticles(interestVector: number[]): Promise<any[]> {
+export async function getRelevantArticles(interestVector: number[], userId?: string): Promise<any[]> {
+    const usedArticleIds = new Set<number>();
+
+    // 1. Fetch user's previous article_ids from daily_playlists (last 7 days)
+    if (userId) {
+        try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            const { data: pastPlaylists } = await supabaseServer
+                .from('daily_playlists')
+                .select('article_ids')
+                .eq('user_id', userId)
+                .gte('created_at', sevenDaysAgo);
+
+            if (pastPlaylists) {
+                for (const p of pastPlaylists) {
+                    if (Array.isArray(p.article_ids)) {
+                        p.article_ids.forEach((id: number) => usedArticleIds.add(Number(id)));
+                    }
+                }
+            }
+            console.log(`[Deduplication Filter 🛡️] User ${userId} has consumed ${usedArticleIds.size} article(s) in past 7 days.`);
+        } catch (err) {
+            console.warn("Failed to fetch past article_ids for deduplication:", err);
+        }
+    }
+
+    // 2. Perform vector search matching
     const { data: articles, error } = await supabaseServer
         .rpc('match_news_articles', {
             query_embedding: interestVector,
-            match_threshold: 0.35,
-            match_count: 15
+            match_threshold: 0.30,
+            match_count: 25
         });
 
     if (error || !articles || articles.length === 0) {
@@ -72,8 +98,13 @@ export async function getRelevantArticles(interestVector: number[]): Promise<any
 
     const now = Date.now();
 
-    // Calculate Recency-Weighted Similarity Score: Score = Similarity * exp(-0.05 * days_old)
-    const scoredArticles = articles.map((article: any) => {
+    // 3. Filter out used articles + calculate Recency-Weighted Similarity Score
+    const freshArticles = articles.filter((article: any) => !usedArticleIds.has(Number(article.id)));
+    
+    // Fallback: If deduplication leaves fewer than 3 articles, allow fallback to top matched articles
+    const candidateArticles = freshArticles.length >= 3 ? freshArticles : articles;
+
+    const scoredArticles = candidateArticles.map((article: any) => {
         const publishedDate = article.published_at ? new Date(article.published_at).getTime() : now;
         const ageInDays = Math.max(0, (now - publishedDate) / (1000 * 60 * 60 * 24));
         const recencyWeight = Math.exp(-0.05 * ageInDays);
