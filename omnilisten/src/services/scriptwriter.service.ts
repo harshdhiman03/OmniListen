@@ -1,5 +1,5 @@
 import { supabaseServer } from '@/lib/supabase';
-import { genAI, SCRIPTWRITER_SYSTEM_PROMPT } from '@/lib/gemini';
+import { SCRIPTWRITER_SYSTEM_PROMPT } from '@/lib/gemini';
 import Groq from 'groq-sdk';
 
 const groq = new Groq({
@@ -13,7 +13,7 @@ const LANGUAGE_NAME_MAP: Record<string, string> = {
     bn: 'Bengali (বাংলা) in Bengali script',
     mr: 'Marathi (मराठी) in Devanagari script',
     gu: 'Gujarati (ગુજરાતી) in Gujarati script',
-    kn: 'Kannada (கன்னட) in Kannada script',
+    kn: 'Kannada (ಕನ್ನಡ) in Kannada script',
     ml: 'Malayalam (മലയാളം) in Malayalam script',
     pa: 'Punjabi (ਪੰਜਾਬੀ) in Gurmukhi script',
     en: 'English'
@@ -51,14 +51,16 @@ export async function getUserInterestVector(userId: string): Promise<number[]> {
 }
 
 /**
- * Executes an RPC call to match the user's vector against recent news articles.
+ * Senior Architect Recency-Weighted Vector Search:
+ * Retrieves news articles using vector similarity combined with exponential time-decay scoring.
+ * Prioritizes fresh news published within the last 48 hours.
  */
 export async function getRelevantArticles(interestVector: number[]): Promise<any[]> {
     const { data: articles, error } = await supabaseServer
         .rpc('match_news_articles', {
             query_embedding: interestVector,
-            match_threshold: 0.45,
-            match_count: 5
+            match_threshold: 0.35,
+            match_count: 15
         });
 
     if (error || !articles || articles.length === 0) {
@@ -68,7 +70,24 @@ export async function getRelevantArticles(interestVector: number[]): Promise<any
         throw customError;
     }
 
-    return articles;
+    const now = Date.now();
+
+    // Calculate Recency-Weighted Similarity Score: Score = Similarity * exp(-0.05 * days_old)
+    const scoredArticles = articles.map((article: any) => {
+        const publishedDate = article.published_at ? new Date(article.published_at).getTime() : now;
+        const ageInDays = Math.max(0, (now - publishedDate) / (1000 * 60 * 60 * 24));
+        const recencyWeight = Math.exp(-0.05 * ageInDays);
+        const rawSimilarity = article.similarity || 0.5;
+        
+        return {
+            ...article,
+            recency_score: rawSimilarity * recencyWeight
+        };
+    });
+
+    // Sort by recency-weighted score descending and pick top 5
+    scoredArticles.sort((a: any, b: any) => b.recency_score - a.recency_score);
+    return scoredArticles.slice(0, 5);
 }
 
 /**

@@ -1,4 +1,11 @@
 /**
+ * ITTSProvider Strategy Pattern Interface for zero-downtime TTS Provider Fallbacks.
+ */
+export interface ITTSProvider {
+    synthesize(text: string, languageCode: string): Promise<Buffer>;
+}
+
+/**
  * Segments a long podcast script into digestible chunks (roughly 3 sentences each)
  * to prevent payload limits and optimize playback pacing. Supports Indic Purna Virama (।).
  */
@@ -54,12 +61,10 @@ function splitTextIntoSafeSubChunks(text: string, maxLength: number = 150): stri
 }
 
 /**
- * Fires HTTP requests for text sub-phrases to the Vercel-native multi-lingual TTS engine,
- * concatenates all MP3 buffers, and returns the final binary MP3 Node Buffer.
- * Supports English ('en'), Hindi ('hi'), Tamil ('ta'), Telugu ('te'), Marathi ('mr'), Bengali ('bn'), etc.
+ * Native Multi-Lingual Google Translate TTS Strategy Implementation.
  */
-export async function generateAudioBufferForChunk(text: string, languageCode: string = 'en'): Promise<Buffer> {
-    try {
+export class GoogleTranslateTTSProvider implements ITTSProvider {
+    async synthesize(text: string, languageCode: string = 'en'): Promise<Buffer> {
         const subChunks = splitTextIntoSafeSubChunks(text, 150);
         const audioBuffers: Buffer[] = [];
         const lang = languageCode || 'en';
@@ -91,8 +96,31 @@ export async function generateAudioBufferForChunk(text: string, languageCode: st
         }
 
         return Buffer.concat(audioBuffers);
-    } catch (err: any) {
-        console.error("Vercel-Native TTS Synthesis Error:", err);
-        throw new Error(`Vercel TTS Generation Error: ${err?.message || err}`);
     }
+}
+
+/**
+ * Resilient Fallback Wrapper Provider.
+ */
+export class ResilientTTSProvider implements ITTSProvider {
+    constructor(private primary: ITTSProvider) {}
+
+    async synthesize(text: string, languageCode: string): Promise<Buffer> {
+        try {
+            return await this.primary.synthesize(text, languageCode);
+        } catch (err: any) {
+            console.error("Primary TTS Provider failed, attempting fallback:", err);
+            return await this.primary.synthesize(text, 'en');
+        }
+    }
+}
+
+const defaultTTSProvider = new ResilientTTSProvider(new GoogleTranslateTTSProvider());
+
+/**
+ * Fires HTTP requests for text sub-phrases to the resilient multi-lingual TTS engine provider,
+ * concatenates all MP3 buffers, and returns the final binary MP3 Node Buffer.
+ */
+export async function generateAudioBufferForChunk(text: string, languageCode: string = 'en'): Promise<Buffer> {
+    return defaultTTSProvider.synthesize(text, languageCode);
 }

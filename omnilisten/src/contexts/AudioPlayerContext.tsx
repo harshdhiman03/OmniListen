@@ -73,6 +73,39 @@ export function AudioPlayerProvider({ children, initialTracks }: { children: Rea
         setPlaybackRate(rate);
     };
 
+    // MediaSession API Integration for Lockscreen & Bluetooth Hardware Controls
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'Daily AI Briefing',
+                artist: 'OmniListen',
+                album: 'Personalized News Audiobook',
+                artwork: [
+                    { src: '/favicon.ico', sizes: '96x96', type: 'image/x-icon' }
+                ]
+            });
+
+            try {
+                navigator.mediaSession.setActionHandler('play', () => {
+                    const activeHtml = activePlayerRef.current === 'A' ? playerA.current : playerB.current;
+                    activeHtml?.play().catch(console.error);
+                    setIsPlaying(true);
+                });
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    const activeHtml = activePlayerRef.current === 'A' ? playerA.current : playerB.current;
+                    activeHtml?.pause();
+                    setIsPlaying(false);
+                });
+                navigator.mediaSession.setActionHandler('seekbackward', () => skipBackward10());
+                navigator.mediaSession.setActionHandler('seekforward', () => skipForward10());
+                navigator.mediaSession.setActionHandler('previoustrack', () => skipBackward10());
+                navigator.mediaSession.setActionHandler('nexttrack', () => skipNext());
+            } catch (e) {
+                console.warn("MediaSession action handler error:", e);
+            }
+        }
+    }, []);
+
     useEffect(() => {
         if (!playerA.current && !playerB.current) {
             playerA.current = new Audio();
