@@ -10,6 +10,7 @@ export const maxDuration = 60; // Up to 60s execution per user worker
 /**
  * Isolated Worker Endpoint for single-user briefing processing.
  * Solves Vercel HTTP timeouts by providing dedicated execution bounds and fault isolation per user.
+ * Applies a Strict Freshness Guard to skip duplicate audiobooks when 0 new articles are ingested.
  */
 export async function GET(request: Request) {
     const startTime = Date.now();
@@ -40,10 +41,29 @@ export async function GET(request: Request) {
         const sessionDateId = new Date().toISOString().split('T')[0];
         const preferredLanguage = user.preferred_language || 'en';
 
-        // 2. Retrieve matched news stories with deduplication filter
+        // 2. Retrieve matched news stories with deduplication & Strict Freshness Guard
         const articles = await getRelevantArticles(user.interest_vector, userId);
         if (!articles || articles.length === 0) {
-            return NextResponse.json({ status: "No articles matched", userId }, { status: 200 });
+            const executionTimeMs = Date.now() - startTime;
+            console.log(`[Worker Skipped] User ${userId} has no fresh unread news articles for today.`);
+
+            try {
+                await supabaseServer.from('cron_logs').insert({
+                    cron_name: `worker-process-user-${userId}`,
+                    status: 'Skipped',
+                    details: { userId, reason: 'No fresh unread news articles available for today' },
+                    execution_time_ms: executionTimeMs
+                });
+            } catch (logErr) {
+                console.warn("Failed to write worker skip log:", logErr);
+            }
+
+            return NextResponse.json({ 
+                status: "Skipped", 
+                reason: "No fresh unread news articles available for today", 
+                userId,
+                executionTimeMs 
+            }, { status: 200 });
         }
 
         const articleIds = articles.map(a => Number(a.id)).filter(Boolean);

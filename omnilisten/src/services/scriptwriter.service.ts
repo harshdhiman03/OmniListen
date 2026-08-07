@@ -54,6 +54,7 @@ export async function getUserInterestVector(userId: string): Promise<number[]> {
  * Senior Architect Recency-Weighted & Bookmarked Vector Search:
  * Retrieves news articles using vector similarity combined with exponential time-decay scoring,
  * while strictly excluding any articles previously consumed by the user in recent playlists.
+ * Applies a Strict Freshness Guard to prevent creating duplicate audiobooks when 0 new articles are ingested.
  */
 export async function getRelevantArticles(interestVector: number[], userId?: string): Promise<any[]> {
     const usedArticleIds = new Set<number>();
@@ -91,18 +92,22 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
 
     if (error || !articles || articles.length === 0) {
         console.error("RPC matching error:", error);
-        const customError: any = new Error('Failed to fetch highly relevant news articles');
-        customError.status = 500;
-        throw customError;
+        return [];
     }
 
     const now = Date.now();
 
-    // 3. Filter out used articles + calculate Recency-Weighted Similarity Score
+    // 3. Filter out used articles
     const freshArticles = articles.filter((article: any) => !usedArticleIds.has(Number(article.id)));
     
-    // Fallback: If deduplication leaves fewer than 3 articles, allow fallback to top matched articles
-    const candidateArticles = freshArticles.length >= 3 ? freshArticles : articles;
+    // Strict Freshness Guard: If deduplication leaves fewer than 2 fresh unread articles for this user,
+    // return an empty array to prevent creating duplicate audiobooks with yesterday's news.
+    if (userId && freshArticles.length < 2) {
+        console.log(`[Freshness Guard 🛑] User ${userId} has insufficient fresh unread articles (${freshArticles.length} found). Skipping briefing creation to prevent duplicate old news.`);
+        return [];
+    }
+
+    const candidateArticles = freshArticles.length > 0 ? freshArticles : articles;
 
     const scoredArticles = candidateArticles.map((article: any) => {
         const publishedDate = article.published_at ? new Date(article.published_at).getTime() : now;
