@@ -14,8 +14,6 @@
 ## 🌐 Links & Documentation
 
 - **🚀 Production Web App**: [https://omni-listen-fd6n.vercel.app](https://omni-listen-fd6n.vercel.app)
-- **🏛️ Senior Architect Review**: [architectural_review.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/architectural_review.md)
-- **🛠️ Technical Challenges & STAR Method**: [TECHNICAL_CHALLENGES_STAR.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/TECHNICAL_CHALLENGES_STAR.md)
 
 ---
 
@@ -56,23 +54,24 @@
 
 ```mermaid
 graph TD
-    User([User / Mobile Browser]) -->|Next.js 16 App Router| Frontend[OmniListen Dashboard]
-    Frontend -->|MediaSession API| Lockscreen[Mobile Lockscreen Controls]
-    Frontend -->|Web Audio API| Visualizer[Liquid Orb 60fps Canvas]
+    User(["User / Mobile Browser"]) -->|Next.js 16 App Router| Frontend["OmniListen Dashboard"]
+    Frontend -->|MediaSession API| Lockscreen["Mobile Lockscreen Controls"]
+    Frontend -->|Web Audio API| Visualizer["Liquid Orb 60fps Canvas"]
     
-    CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute[/api/cron/ingest-news]
-    CronTrigger -->|04:00 UTC| FanOutRoute[/api/cron/daily-briefing]
+    CronTrigger["Vercel Cron Trigger"] -->|"03:00 UTC"| IngestRoute["/api/cron/ingest-news"]
+    CronTrigger -->|"04:00 UTC"| FanOutRoute["/api/cron/daily-briefing"]
     
-    IngestRoute -->|Fetch Macro/Micro News| GNews[GNews API]
-    IngestRoute -->|768d Vector Embeddings| Gemini[Google Gemini API]
-    IngestRoute -->|Bulk Upsert| SupabaseDB[(Supabase Postgres + pgvector)]
+    IngestRoute -->|"Fetch Macro/Micro News"| GNews["GNews API"]
+    IngestRoute -->|"768d Vector Embeddings"| Gemini["Google Gemini API"]
+    IngestRoute -->|"Bulk Upsert"| SupabaseDB[("Supabase Postgres + pgvector")]
     
-    FanOutRoute -->|Async Fan-Out <300ms| Worker[/api/cron/process-user-briefing]
-    Worker -->|7-Day Deduplication Vector Search| SupabaseDB
-    Worker -->|Draft Podcast Script| Groq[Groq LLaMA 3.1 8B Instant]
-    Worker -->|ITTSProvider Strategy Pattern| SpeechEngine[Multi-Lingual Speech Engine]
-    SpeechEngine -->|Upload MP3 Chunks| SupabaseStorage[(Supabase Storage)]
-    Worker -->|Insert Playlist & Article Bookmarks| SupabaseDB
+    FanOutRoute -->|"Async Fan-Out <300ms"| Worker["/api/cron/process-user-briefing"]
+    Worker -->|"7-Day Deduplication Vector Search"| SupabaseDB
+    Worker -->|"Draft Podcast Script"| Groq["Groq LLaMA 3.1 8B Instant"]
+    Worker -->|"ITTSProvider Strategy Pattern"| SpeechEngine["Multi-Lingual Speech Engine"]
+    
+    SpeechEngine -->|"Upload MP3 Chunks"| SupabaseStorage[("Supabase Storage")]
+    Worker -->|"Insert Playlist & Article Bookmarks"| SupabaseDB
 ```
 
 ---
