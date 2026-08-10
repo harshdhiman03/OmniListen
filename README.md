@@ -14,9 +14,6 @@
 ## 🌐 Links & Documentation
 
 - **🚀 Production Web App**: [https://omni-listen-fd6n.vercel.app](https://omni-listen-fd6n.vercel.app)
-- **🏛️ Senior Architect Review**: [architectural_review.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/architectural_review.md)
-- **🛠️ Technical Challenges & STAR Method**: [TECHNICAL_CHALLENGES_STAR.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/TECHNICAL_CHALLENGES_STAR.md)
-
 ---
 
 ## 🌟 Product View & Core Features
@@ -74,7 +71,7 @@ graph TD
     Frontend -->|Web Audio API| Visualizer[Liquid Orb 60fps Canvas]
     
     CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute[/api/cron/ingest-news]
-    CronTrigger -->|04:00 UTC| FanOutRoute[/api/cron/daily-briefing]
+    CronTrigger -->|04:00 UTC| FanOutRoute["/api/cron/daily-briefing"]
     
     IngestRoute -->|Fetch Macro/Micro News| GNews[GNews API]
     IngestRoute -->|768d Vector Embeddings| Gemini[Google Gemini API]
