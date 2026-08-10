@@ -77,10 +77,10 @@ graph TD
     IngestRoute -->|768d Vector Embeddings| Gemini[Google Gemini API]
     IngestRoute -->|Bulk Upsert| SupabaseDB[(Supabase Postgres + pgvector)]
     
-    FanOutRoute -->|Async Fan-Out <300ms| Worker[/api/cron/process-user-briefing]
+    FanOutRoute -->|Async Fan-Out <300ms| Worker["/api/cron/process-user-briefing"]
     Worker -->|7-Day Deduplication Vector Search| SupabaseDB
     Worker -->|Draft Podcast Script| Groq[Groq LLaMA 3.1 8B Instant]
-    Worker -->|ITTSProvider Strategy Pattern| SpeechEngine[Multi-Lingual Speech Engine]
+    Worker -->|ITTSProvider Strategy Pattern| SpeechEngine["Multi-Lingual Speech Engine"]
     SpeechEngine -->|Upload MP3 Chunks| SupabaseStorage[(Supabase Storage)]
     Worker -->|Insert Playlist & Article Bookmarks| SupabaseDB
 ```
