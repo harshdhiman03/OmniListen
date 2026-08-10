@@ -12,7 +12,7 @@ const LANGUAGE_NAME_MAP: Record<string, string> = {
     te: 'Telugu (తెలుగు) in Telugu script',
     bn: 'Bengali (বাংলা) in Bengali script',
     mr: 'Marathi (मराठी) in Devanagari script',
-    gu: 'Gujarati (ગુજરાતી) in Gujarati script',
+    gu: 'Gujarati (<ctrl42>ગુજરાતી) in Gujarati script',
     kn: 'Kannada (ಕನ್ನಡ) in Kannada script',
     ml: 'Malayalam (മലയാളം) in Malayalam script',
     pa: 'Punjabi (ਪੰਜਾਬੀ) in Gurmukhi script',
@@ -53,8 +53,8 @@ export async function getUserInterestVector(userId: string): Promise<number[]> {
 /**
  * Senior Architect Recency-Weighted & Bookmarked Vector Search:
  * Retrieves news articles using vector similarity combined with exponential time-decay scoring,
- * while strictly excluding any articles previously consumed by the user in recent playlists.
- * Applies a Strict Freshness Guard to prevent creating duplicate audiobooks when 0 new articles are ingested.
+ * while strictly excluding any articles previously consumed by the user in recent playlists
+ * and enforcing a strict 72-hour publishing recency window.
  */
 export async function getRelevantArticles(interestVector: number[], userId?: string): Promise<any[]> {
     const usedArticleIds = new Set<number>();
@@ -87,7 +87,7 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         .rpc('match_news_articles', {
             query_embedding: interestVector,
             match_threshold: 0.30,
-            match_count: 25
+            match_count: 35
         });
 
     if (error || !articles || articles.length === 0) {
@@ -96,14 +96,20 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
     }
 
     const now = Date.now();
+    const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // Strict 72-hour recency window
 
-    // 3. Filter out used articles
-    const freshArticles = articles.filter((article: any) => !usedArticleIds.has(Number(article.id)));
-    
-    // Strict Freshness Guard: If deduplication leaves fewer than 2 fresh unread articles for this user,
-    // return an empty array to prevent creating duplicate audiobooks with yesterday's news.
+    // 3. Strict Filtering: Exclude consumed articles AND enforce 72h publication window
+    const freshArticles = articles.filter((article: any) => {
+        const isUsed = usedArticleIds.has(Number(article.id));
+        const pubDate = article.published_at ? new Date(article.published_at).getTime() : now;
+        const isRecent = pubDate >= threeDaysAgoMs;
+        return !isUsed && isRecent;
+    });
+
+    // Strict Freshness Guard: If deduplication and 72h recency window leaves fewer than 2 fresh unread articles for this user,
+    // return an empty array to prevent creating duplicate audiobooks with old news.
     if (userId && freshArticles.length < 2) {
-        console.log(`[Freshness Guard 🛑] User ${userId} has insufficient fresh unread articles (${freshArticles.length} found). Skipping briefing creation to prevent duplicate old news.`);
+        console.log(`[Freshness Guard 🛑] User ${userId} has insufficient fresh unread articles (${freshArticles.length} found within 72h window). Skipping briefing creation.`);
         return [];
     }
 
@@ -112,7 +118,7 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
     const scoredArticles = candidateArticles.map((article: any) => {
         const publishedDate = article.published_at ? new Date(article.published_at).getTime() : now;
         const ageInDays = Math.max(0, (now - publishedDate) / (1000 * 60 * 60 * 24));
-        const recencyWeight = Math.exp(-0.05 * ageInDays);
+        const recencyWeight = Math.exp(-0.1 * ageInDays); // Stronger time decay
         const rawSimilarity = article.similarity || 0.5;
         
         return {
