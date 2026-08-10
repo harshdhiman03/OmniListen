@@ -14,6 +14,8 @@
 ## 🌐 Links & Documentation
 
 - **🚀 Production Web App**: [https://omni-listen-fd6n.vercel.app](https://omni-listen-fd6n.vercel.app)
+- **🏛️ Senior Architect Review**: [architectural_review.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/architectural_review.md)
+- **🛠️ Technical Challenges & STAR Method**: [TECHNICAL_CHALLENGES_STAR.md](file:///c:/Users/Harsh%20Dhiman/Projects/OmniListen/TECHNICAL_CHALLENGES_STAR.md)
 
 ---
 
@@ -50,28 +52,40 @@
 
 ---
 
+## 🎯 Strategic Product Matrix: Generic Chatbots vs. OmniListen
+
+| Feature & UX Dimension | Generic Chatbots (ChatGPT / Gemini) | 🎧 OmniListen AI Platform |
+| :--- | :--- | :--- |
+| **Morning Routine UX** | ❌ **High Friction**: Requires unlocking phone, typing/speaking prompts, waiting for text generation, and tapping Voice Mode daily. | ⚡ **Zero-Friction Hands-Free Audio**: Pre-rendered daily 3-minute briefing ready before you wake up with 1-click lockscreen / Bluetooth playback. |
+| **Fact Grounding & Accuracy** | ⚠️ **Hallucination Risk**: Relies on unverified web search snippets or static model weights. | 🛡️ **Vector RAG Grounded**: Real-time GNews ingestion vector-matched via 768d Gemini embeddings and grounded directly in Groq LLaMA context. |
+| **Story Deduplication** | ❌ **Repetitive News**: Re-tells yesterday's major headlines because it lacks persistent listening memory. | 🎯 **100% Guaranteed Fresh News**: 7-day `article_ids` consumption bookmarking + Strict Freshness Guard automatically skips duplicate briefings. |
+| **Recency & Time Decay** | ⚠️ **Stale Story Matching**: Matches high-similarity articles regardless of publication age. | ⏱️ **72h Recency Window**: Exponential time-decay scoring ($\text{Similarity} \times e^{-0.1 \times \text{DaysOld}}$) strictly excludes news older than 72 hours. |
+| **Multi-Lingual Indic Speech** | ⚠️ **Generic Voice Synthesis**: Struggles with authentic regional Indic accents, script nuance, and sentence cadence. | 🌍 **Native 10 Indic Speech Engine**: Native script rendering and localized speech synthesis for English + 9 Indian regional languages with 0ms JSONB audio caching. |
+| **Background Automation** | ❌ **Manual Initiation**: Requires the user to remember to prompt the bot every morning. | 🚀 **Async Cron Fan-Out Workers**: Automated Vercel Cron background workers run daily at 04:00 UTC with <300ms execution times and fault isolation. |
+
+---
+
 ## 🏛️ Technical Architecture View
 
 ```mermaid
 graph TD
-    User(["User / Mobile Browser"]) -->|Next.js 16 App Router| Frontend["OmniListen Dashboard"]
-    Frontend -->|MediaSession API| Lockscreen["Mobile Lockscreen Controls"]
-    Frontend -->|Web Audio API| Visualizer["Liquid Orb 60fps Canvas"]
+    User([User / Mobile Browser]) -->|Next.js 16 App Router| Frontend[OmniListen Dashboard]
+    Frontend -->|MediaSession API| Lockscreen[Mobile Lockscreen Controls]
+    Frontend -->|Web Audio API| Visualizer[Liquid Orb 60fps Canvas]
     
-    CronTrigger["Vercel Cron Trigger"] -->|"03:00 UTC"| IngestRoute["/api/cron/ingest-news"]
-    CronTrigger -->|"04:00 UTC"| FanOutRoute["/api/cron/daily-briefing"]
+    CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute[/api/cron/ingest-news]
+    CronTrigger -->|04:00 UTC| FanOutRoute[/api/cron/daily-briefing]
     
-    IngestRoute -->|"Fetch Macro/Micro News"| GNews["GNews API"]
-    IngestRoute -->|"768d Vector Embeddings"| Gemini["Google Gemini API"]
-    IngestRoute -->|"Bulk Upsert"| SupabaseDB[("Supabase Postgres + pgvector")]
+    IngestRoute -->|Fetch Macro/Micro News| GNews[GNews API]
+    IngestRoute -->|768d Vector Embeddings| Gemini[Google Gemini API]
+    IngestRoute -->|Bulk Upsert| SupabaseDB[(Supabase Postgres + pgvector)]
     
-    FanOutRoute -->|"Async Fan-Out <300ms"| Worker["/api/cron/process-user-briefing"]
-    Worker -->|"7-Day Deduplication Vector Search"| SupabaseDB
-    Worker -->|"Draft Podcast Script"| Groq["Groq LLaMA 3.1 8B Instant"]
-    Worker -->|"ITTSProvider Strategy Pattern"| SpeechEngine["Multi-Lingual Speech Engine"]
-    
-    SpeechEngine -->|"Upload MP3 Chunks"| SupabaseStorage[("Supabase Storage")]
-    Worker -->|"Insert Playlist & Article Bookmarks"| SupabaseDB
+    FanOutRoute -->|Async Fan-Out <300ms| Worker[/api/cron/process-user-briefing]
+    Worker -->|7-Day Deduplication Vector Search| SupabaseDB
+    Worker -->|Draft Podcast Script| Groq[Groq LLaMA 3.1 8B Instant]
+    Worker -->|ITTSProvider Strategy Pattern| SpeechEngine[Multi-Lingual Speech Engine]
+    SpeechEngine -->|Upload MP3 Chunks| SupabaseStorage[(Supabase Storage)]
+    Worker -->|Insert Playlist & Article Bookmarks| SupabaseDB
 ```
 
 ---
@@ -85,7 +99,7 @@ graph TD
 
 ### 2. Recency-Weighted Hybrid Vector Search
 - **Formula**: Applies an exponential time-decay penalty to similarity scores:
-  $$\text{Final Score} = \text{CosineSimilarity} \times e^{-0.05 \times \text{DaysOld}}$$
+  $$\text{Final Score} = \text{CosineSimilarity} \times e^{-0.1 \times \text{DaysOld}}$$
 - **Impact**: Ensures fresh news published within the last 48 hours is prioritized over older high-similarity articles.
 
 ### 3. Sub-Chunking Regex & Strategy Pattern Speech Pipeline
