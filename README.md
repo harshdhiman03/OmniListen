@@ -70,7 +70,7 @@ graph TD
     Frontend -->|MediaSession API| Lockscreen[Mobile Lockscreen Controls]
     Frontend -->|Web Audio API| Visualizer[Liquid Orb 60fps Canvas]
     
-    CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute[/api/cron/ingest-news]
+    CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute["/api/cron/ingest-news"]
     CronTrigger -->|04:00 UTC| FanOutRoute["/api/cron/daily-briefing"]
     
     IngestRoute -->|Fetch Macro/Micro News| GNews[GNews API]
