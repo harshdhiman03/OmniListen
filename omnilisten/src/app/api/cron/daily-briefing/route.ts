@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Max 60s execution limit
 
 /**
  * Senior Architect Async Fan-Out Controller Route.
- * Fetches all active users and dispatches non-blocking async worker jobs per user.
- * Responds in < 300ms, eliminating Vercel 60s HTTP timeout crashes at scale.
+ * Fetches all active users and dispatches parallel HTTP requests to worker endpoints.
+ * Awaits all dispatches in parallel, guaranteeing zero dropped workers on Vercel Serverless.
  */
 export async function GET(request: Request) {
     const startTime = Date.now();
@@ -32,30 +33,31 @@ export async function GET(request: Request) {
         const origin = new URL(request.url).origin;
         const cronSecret = process.env.CRON_SECRET || '';
 
-        // 2. Dispatch non-blocking async worker calls for each user (Fan-Out)
+        // 2. Dispatch parallel HTTP requests to worker endpoints for each user
         const workerDispatches = users.map(async (user) => {
             const workerUrl = `${origin}/api/cron/process-user-briefing?userId=${user.id}`;
             try {
-                // Non-blocking fetch to worker endpoint
-                fetch(workerUrl, {
+                const res = await fetch(workerUrl, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${cronSecret}`
                     }
-                }).catch(err => console.error(`Async fan-out error for user ${user.id}:`, err));
-            } catch (err) {
+                });
+                return { userId: user.id, status: res.status };
+            } catch (err: any) {
                 console.error(`Fan-out dispatch error for user ${user.id}:`, err);
+                return { userId: user.id, status: 500, error: err.message };
             }
         });
 
-        // Trigger dispatches asynchronously without blocking the response
-        Promise.allSettled(workerDispatches);
+        // Await all parallel worker dispatches before completing response on Vercel Serverless
+        const dispatchResults = await Promise.allSettled(workerDispatches);
 
         const executionTimeMs = Date.now() - startTime;
         const resultPayload = { 
             status: "Success", 
             totalUsers: users.length, 
-            fanoutDispatched: true,
+            dispatchedWorkers: dispatchResults.length,
             executionTimeMs
         };
 

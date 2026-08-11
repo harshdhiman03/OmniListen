@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { recalibrateUserInterestVector } from '@/services/recalibration.service';
 
 export async function POST(request: Request) {
     try {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Translate the dummy Article ID mathematically to null so PostgreSQL 
+        // Translate dummy Article ID (0) mathematically to null so PostgreSQL 
         // doesn't attempt to strictly map it against the "articles" foreign key table!
         const finalArticleId = article_id === 0 ? null : article_id;
 
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
                 user_id,
                 article_id: finalArticleId,
                 action_type,
-                duration_listened_seconds
+                duration_listened_seconds: duration_listened_seconds || 0
             });
 
         if (error) {
@@ -36,7 +37,14 @@ export async function POST(request: Request) {
             );
         }
 
-        return NextResponse.json({ success: true });
+        // Asynchronously trigger preference vector recalibration for key telemetry events
+        if (['complete', 'skip', 'heart'].includes(action_type) || (duration_listened_seconds && duration_listened_seconds >= 30)) {
+            recalibrateUserInterestVector(user_id).catch(err => {
+                console.warn("Async telemetry vector recalibration error:", err);
+            });
+        }
+
+        return NextResponse.json({ success: true, recalibrating: true });
 
     } catch (error: any) {
         console.error("Telemetry route error:", error);
