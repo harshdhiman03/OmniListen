@@ -4,6 +4,7 @@ import { generateText } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
 import { z } from 'zod';
 import { genAI } from '@/lib/gemini';
+import { fetchTopHackerNewsArticles } from '@/services/hackernews.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,110 +35,98 @@ export async function GET(request: Request) {
             .filter(Boolean)
             .join('\n');
 
-        if (!combinedInterests) {
-            return NextResponse.json({ status: "No user interests found to generate queries." }, { status: 200 });
-        }
-
-        // 2. Initialize Vercel AI SDK with Groq
-        const groq = createGroq({
-            apiKey: process.env.GROQ_API_KEY,
-        });
-
-        // 3. Define the Zod schema for NewsQueries (validation)
-        const NewsQueriesSchema = z.object({
-            queries: z.array(z.string().max(200)).max(15)
-        });
-
-        // 4. Generate the optimized Boolean search queries using generateText 
-        const { text } = await generateText({
-            model: groq('llama-3.1-8b-instant'),
-            system: `You are a News Director. Your task is to read the combined user interests provided and group them into a maximum of 15 highly optimized Boolean search queries using the OR operator (e.g., "Quantum Computing" OR "Artificial Intelligence").
-            Ensure that no individual query string exceeds 200 characters in length. Do not include unnecessary filler words. Focus purely on the key entities, technologies, or subjects mentioned in the interests.
-            
-            IMPORTANT: You MUST respond ONLY with a valid JSON object matching this exact schema:
-            {
-              "queries": ["query 1", "query 2"]
-            }
-            Do not include any other text or markdown formatting.`,
-            prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
-        });
-
-        // 5. Parse and validate the response
-        let parsedData;
-        try {
-            const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            parsedData = JSON.parse(cleanText);
-        } catch (e) {
-            throw new Error('Model failed to return valid JSON: ' + text);
-        }
-
-        const validatedObject = NewsQueriesSchema.parse(parsedData);
-        console.log("Generated News Queries:", validatedObject.queries);
-
-        // 6. GNews API Integration
-        const apiKey = process.env.GNEWS_API_KEY;
-        if (!apiKey) {
-            throw new Error("GNEWS_API_KEY environment variable is not defined.");
-        }
-
         const allRawArticles: any[] = [];
 
-        // --- Macro Core (Top Headlines) ---
-        console.log("Fetching Macro Core (Top Headlines)...");
-        const topHeadlinesUrls = [
-            `https://gnews.io/api/v4/top-headlines?category=world&lang=en&apikey=${apiKey}`,
-            `https://gnews.io/api/v4/top-headlines?category=nation&country=in&lang=en&apikey=${apiKey}`
-        ];
-
-        try {
-            const headlinesResponses = await Promise.all(
-                topHeadlinesUrls.map(url => fetch(url).then(res => res.json()))
-            );
-
-            for (let i = 0; i < headlinesResponses.length; i++) {
-                const data = headlinesResponses[i];
-                const country = i === 1 ? "in" : null;
-                if (data && Array.isArray(data.articles)) {
-                    const articlesWithCountry = data.articles.map((a: any) => ({ ...a, source_country: country }));
-                    allRawArticles.push(...articlesWithCountry);
-                } else if (data && data.errors) {
-                    console.error("GNews Headlines API error:", data.errors);
-                }
-            }
-        } catch (err) {
-            console.error("Failed fetching top headlines:", err);
-        }
-
-        // --- Micro Tail (Search Queries) ---
-        console.log("Fetching Micro Tail (Search Queries)...");
-        try {
-            const searchPromises = validatedObject.queries.map(async (query) => {
-                const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=en&max=10&sortby=relevance&apikey=${apiKey}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                return data;
+        // 2. Parallel Ingestion: Fetch Hacker News Top Stories (100% Free Open API)
+        const hnPromise = fetchTopHackerNewsArticles(25).then(hnArticles => {
+            hnArticles.forEach(a => {
+                allRawArticles.push({
+                    title: a.title,
+                    description: a.content,
+                    content: a.content,
+                    url: a.url,
+                    publishedAt: a.published_at,
+                    source: { name: a.source_domain },
+                    source_country: null
+                });
             });
+        }).catch(err => console.warn("Hacker News ingestion warning:", err));
 
-            const searchResponses = await Promise.all(searchPromises);
+        // 3. GNews API Integration (if interests exist)
+        let generatedQueries: string[] = [];
+        const apiKey = process.env.GNEWS_API_KEY;
 
-            for (const data of searchResponses) {
-                if (data && Array.isArray(data.articles)) {
-                    allRawArticles.push(...data.articles);
-                } else if (data && data.errors) {
-                    console.error("GNews Search API error:", data.errors);
+        const gnewsPromise = (async () => {
+            if (!combinedInterests || !apiKey) return;
+
+            try {
+                const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+                const NewsQueriesSchema = z.object({
+                    queries: z.array(z.string().max(200)).max(15)
+                });
+
+                const { text } = await generateText({
+                    model: groq('llama-3.1-8b-instant'),
+                    system: `You are a News Director. Your task is to read the combined user interests provided and group them into a maximum of 15 highly optimized Boolean search queries using the OR operator (e.g., "Quantum Computing" OR "Artificial Intelligence").
+                    Ensure that no individual query string exceeds 200 characters in length. Do not include unnecessary filler words. Focus purely on the key entities, technologies, or subjects mentioned in the interests.
+                    
+                    IMPORTANT: You MUST respond ONLY with a valid JSON object matching this exact schema:
+                    {
+                      "queries": ["query 1", "query 2"]
+                    }
+                    Do not include any other text or markdown formatting.`,
+                    prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
+                });
+
+                const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsedData = JSON.parse(cleanText);
+                const validatedObject = NewsQueriesSchema.parse(parsedData);
+                generatedQueries = validatedObject.queries;
+
+                // --- Macro Core (Top Headlines) ---
+                const topHeadlinesUrls = [
+                    `https://gnews.io/api/v4/top-headlines?category=world&lang=en&apikey=${apiKey}`,
+                    `https://gnews.io/api/v4/top-headlines?category=nation&country=in&lang=en&apikey=${apiKey}`
+                ];
+
+                const headlinesResponses = await Promise.all(
+                    topHeadlinesUrls.map(url => fetch(url).then(res => res.json()).catch(() => null))
+                );
+
+                for (let i = 0; i < headlinesResponses.length; i++) {
+                    const data = headlinesResponses[i];
+                    const country = i === 1 ? "in" : null;
+                    if (data && Array.isArray(data.articles)) {
+                        allRawArticles.push(...data.articles.map((a: any) => ({ ...a, source_country: country })));
+                    }
                 }
+
+                // --- Micro Tail (Search Queries) ---
+                const searchPromises = generatedQueries.map(async (query) => {
+                    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=en&max=10&sortby=relevance&apikey=${apiKey}`;
+                    const res = await fetch(url);
+                    return await res.json();
+                });
+
+                const searchResponses = await Promise.all(searchPromises);
+                for (const data of searchResponses) {
+                    if (data && Array.isArray(data.articles)) {
+                        allRawArticles.push(...data.articles);
+                    }
+                }
+            } catch (err) {
+                console.error("GNews Ingestion Error:", err);
             }
-        } catch (err) {
-            console.error("Failed fetching search queries:", err);
-        }
+        })();
+
+        // Wait for both GNews and Hacker News ingestion promises to finish
+        await Promise.allSettled([hnPromise, gnewsPromise]);
 
         // --- Data Cleaning (Deduplication based on URL) ---
         const seenUrls = new Set<string>();
         const deduplicatedArticles = allRawArticles.filter(article => {
             if (!article.url) return false;
-            if (seenUrls.has(article.url)) {
-                return false;
-            }
+            if (seenUrls.has(article.url)) return false;
             seenUrls.add(article.url);
             return true;
         });
@@ -189,7 +178,7 @@ export async function GET(request: Request) {
                         title: article.title || "",
                         content: article.content || article.description || "",
                         url: article.url,
-                        source_domain: article.source?.name || "",
+                        source_domain: article.source?.name || "news.ycombinator.com",
                         published_at: article.publishedAt || new Date().toISOString(),
                         article_vector: embeddingVector,
                         source_country: article.source_country || null
@@ -213,14 +202,14 @@ export async function GET(request: Request) {
         const executionTimeMs = Date.now() - startTime;
         const resultPayload = {
             status: "Success",
-            queries: validatedObject.queries,
+            queries: generatedQueries,
             totalRawCount: allRawArticles.length,
             deduplicatedCount: deduplicatedArticles.length,
             trulyNewCount: trulyNewArticles.length,
             insertedCount: insertedCount
         };
 
-        // Write persistent audit log into Supabase cron_logs table (safe wrapper)
+        // Write persistent audit log into Supabase cron_logs table
         try {
             await supabaseServer.from('cron_logs').insert({
                 cron_name: 'ingest-news',
