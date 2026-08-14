@@ -72,13 +72,16 @@ export async function GET(request: Request) {
         const scriptResponse = await generatePodcastScript(articles, preferredLanguage);
         const chunks = segmentScriptIntoChunks(scriptResponse);
 
-        // 4. Synthesize & Upload Audio Chunks in target language
-        const publicUrls: string[] = [];
-        for (let i = 0; i < chunks.length; i++) {
-            const audioBuffer = await generateAudioBufferForChunk(chunks[i], preferredLanguage);
-            const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, i + 1, preferredLanguage);
-            publicUrls.push(url);
-        }
+        // 4. Synthesize & Upload Audio Chunks in target language (Parallelized for Serverless Execution)
+        const chunkPromises = chunks.map(async (chunk, index) => {
+            const audioBuffer = await generateAudioBufferForChunk(chunk, preferredLanguage);
+            const url = await uploadAudioChunk(audioBuffer, userId, sessionDateId, index + 1, preferredLanguage);
+            return { index, url };
+        });
+
+        const uploadedChunks = await Promise.all(chunkPromises);
+        uploadedChunks.sort((a, b) => a.index - b.index);
+        const publicUrls: string[] = uploadedChunks.map(c => c.url);
 
         // 5. Insert Daily Playlist Record
         const initialCache = { [preferredLanguage]: publicUrls };

@@ -95,6 +95,28 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         return [];
     }
 
+    // Application-Level Fallback: Enrich articles with published_at if RPC output lacks it
+    const missingPubDateIds = articles.filter((a: any) => !a.published_at).map((a: any) => Number(a.id)).filter(Boolean);
+    if (missingPubDateIds.length > 0) {
+        try {
+            const { data: dbArticles } = await supabaseServer
+                .from('articles')
+                .select('id, published_at')
+                .in('id', missingPubDateIds);
+
+            if (dbArticles) {
+                const pubDateMap = new Map(dbArticles.map(a => [Number(a.id), a.published_at]));
+                articles.forEach((a: any) => {
+                    if (!a.published_at && pubDateMap.has(Number(a.id))) {
+                        a.published_at = pubDateMap.get(Number(a.id));
+                    }
+                });
+            }
+        } catch (enrichErr) {
+            console.warn("Failed to enrich article published_at dates:", enrichErr);
+        }
+    }
+
     const now = Date.now();
     const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // Strict 72-hour recency window
 

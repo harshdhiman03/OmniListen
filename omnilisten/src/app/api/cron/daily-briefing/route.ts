@@ -30,12 +30,19 @@ export async function GET(request: Request) {
             throw new Error('Supabase Profile Fetch Error');
         }
 
-        const origin = new URL(request.url).origin;
+        let baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : new URL(request.url).origin);
+        if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+            baseUrl = `https://${baseUrl}`;
+        }
+        if (request.url.startsWith('https://') && baseUrl.startsWith('http://')) {
+            baseUrl = baseUrl.replace('http://', 'https://');
+        }
+
         const cronSecret = process.env.CRON_SECRET || '';
 
         // 2. Dispatch parallel HTTP requests to worker endpoints for each user
         const workerDispatches = users.map(async (user) => {
-            const workerUrl = `${origin}/api/cron/process-user-briefing?userId=${user.id}`;
+            const workerUrl = `${baseUrl}/api/cron/process-user-briefing?userId=${user.id}`;
             try {
                 const res = await fetch(workerUrl, {
                     method: 'GET',
@@ -43,7 +50,8 @@ export async function GET(request: Request) {
                         'Authorization': `Bearer ${cronSecret}`
                     }
                 });
-                return { userId: user.id, status: res.status };
+                const resData = await res.json().catch(() => ({}));
+                return { userId: user.id, status: res.status, response: resData };
             } catch (err: any) {
                 console.error(`Fan-out dispatch error for user ${user.id}:`, err);
                 return { userId: user.id, status: 500, error: err.message };
@@ -53,11 +61,23 @@ export async function GET(request: Request) {
         // Await all parallel worker dispatches before completing response on Vercel Serverless
         const dispatchResults = await Promise.allSettled(workerDispatches);
 
+        const workerStatuses = dispatchResults.map((r, i) => {
+            if (r.status === 'fulfilled') {
+                return r.value;
+            }
+            return { userId: users[i].id, status: 500, error: String(r.reason) };
+        });
+
+        const successCount = workerStatuses.filter(w => w.status >= 200 && w.status < 300).length;
+        const overallStatus = successCount === users.length ? "Success" : successCount > 0 ? "PartialSuccess" : "Error";
+
         const executionTimeMs = Date.now() - startTime;
         const resultPayload = { 
-            status: "Success", 
+            status: overallStatus, 
             totalUsers: users.length, 
+            successfulWorkers: successCount,
             dispatchedWorkers: dispatchResults.length,
+            workerDetails: workerStatuses,
             executionTimeMs
         };
 
@@ -65,7 +85,7 @@ export async function GET(request: Request) {
         try {
             await supabaseServer.from('cron_logs').insert({
                 cron_name: 'daily-briefing-fanout',
-                status: 'Success',
+                status: overallStatus,
                 details: resultPayload,
                 execution_time_ms: executionTimeMs
             });
@@ -73,7 +93,7 @@ export async function GET(request: Request) {
             console.warn("Failed to write cron_logs entry:", logErr);
         }
 
-        return NextResponse.json(resultPayload, { status: 200 });
+        return NextResponse.json(resultPayload, { status: overallStatus === "Error" ? 500 : 200 });
 
     } catch (error: any) {
         const executionTimeMs = Date.now() - startTime;
