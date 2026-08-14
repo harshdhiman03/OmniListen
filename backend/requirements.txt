@@ -2,3 +2,5 @@ aiohttp
 google-genai
 supabase
 python-dotenv
+sqlalchemy
+asyncpg

@@ -125,6 +125,10 @@ graph TD
 ### 6. Parallel Worker Execution Speedup (94.5% Reduction)
 - **Parallel Synthesis**: Refactored worker TTS chunk synthesis and storage uploads from a sequential loop to parallel `Promise.all` execution, dropping execution duration from **147.8s** down to **8.06s**.
 
+### 7. Supavisor Transaction Pooling & Prepared Statement Collision Defense
+- **Serverless Pooling & NullPool**: Routes database connections through **Supavisor Transaction Pool** (Port 6543) using SQLAlchemy `NullPool` to handle thousands of concurrent serverless workers without connection exhaustion (`max_connections`).
+- **Collision Prevention (`statement_cache_size=0`)**: Explicitly disables driver-level prepared statement caching in `asyncpg` and SQLAlchemy (`statement_cache_size = 0`), eliminating cross-transaction prepared statement collisions (`__asyncpg_stmt_0__`).
+
 ---
 
 ## 📊 Database Schema (Supabase Postgres + pgvector)
