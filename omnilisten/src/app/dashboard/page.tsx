@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { supabaseServer } from '@/lib/supabase';
 import PlaylistSelector from '@/components/PlaylistSelector';
@@ -63,17 +64,31 @@ export default async function DashboardPage() {
                 {/* Production-Ready Liquid Glassmorphic Header Component */}
                 <header className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pt-8 pb-6 mb-8 border-b border-white/5 animate-in fade-in slide-in-from-top-4 duration-700">
                     
-                    {/* 1. Typographic Hierarchy (Left Side) */}
-                    <div className="flex flex-col space-y-1">
-                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-none text-white">
-                            Good morning,{" "}
-                            <span className="bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.3)]">
-                                {userName}
-                            </span>
-                        </h1>
-                        <p className="text-xs font-bold text-zinc-400/80 uppercase tracking-widest pt-0.5">
-                            YOUR DAILY BRIEFING IS READY
-                        </p>
+                    {/* 1. Brand Badge & Typographic Hierarchy (Left Side) */}
+                    <div className="flex items-center gap-4">
+                        <div className="relative group cursor-pointer">
+                            <div className="w-13 h-13 sm:w-15 sm:h-15 rounded-[28px] sm:rounded-[32px] bg-black/70 flex items-center justify-center border-2 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.4)] ring-1 ring-white/10 p-0.5 transition-all duration-300 transform-gpu group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] overflow-hidden">
+                                <Image 
+                                    src="/omnilogo.png" 
+                                    alt="OmniListen Brand Logo" 
+                                    width={56} 
+                                    height={56} 
+                                    className="w-full h-full object-contain rounded-full drop-shadow-[0_0_15px_rgba(6,182,212,0.9)] drop-shadow-[0_0_25px_rgba(6,182,212,0.6)] shrink-0"
+                                    priority
+                                />
+                            </div>
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-none text-white">
+                                Good morning,{" "}
+                                <span className="bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+                                    {userName}
+                                </span>
+                            </h1>
+                            <p className="text-xs font-bold text-zinc-400/80 uppercase tracking-widest pt-0.5">
+                                YOUR DAILY BRIEFING IS READY
+                            </p>
+                        </div>
                     </div>
 
                     {/* 2. Utility Navigation (Right Side) */}
