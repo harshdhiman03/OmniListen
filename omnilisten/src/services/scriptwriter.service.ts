@@ -82,21 +82,70 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         }
     }
 
-    // 2. Perform vector search matching
-    const { data: articles, error } = await supabaseServer
+    // 2. Perform vector search matching with initial threshold
+    let { data: articles, error } = await supabaseServer
         .rpc('match_news_articles', {
             query_embedding: interestVector,
-            match_threshold: 0.30,
-            match_count: 35
+            match_threshold: 0.20,
+            match_count: 50
         });
 
-    if (error || !articles || articles.length === 0) {
-        console.error("RPC matching error:", error);
+    const now = Date.now();
+    const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // Strict 72-hour recency window
+
+    // Helper: Filter unread articles within 72h recency window
+    const filterFreshArticles = (rawArticles: any[]) => {
+        return rawArticles.filter((article: any) => {
+            const isUsed = usedArticleIds.has(Number(article.id));
+            const pubDate = article.published_at ? new Date(article.published_at).getTime() : now;
+            const isRecent = pubDate >= threeDaysAgoMs;
+            return !isUsed && isRecent;
+        });
+    };
+
+    let freshArticles = (articles && articles.length > 0) ? filterFreshArticles(articles) : [];
+
+    // Fallback 1: If threshold 0.20 yielded < 2 fresh articles, relax similarity threshold to -1.0 to capture all recent news
+    if (freshArticles.length < 2) {
+        console.log(`[Recency Fallback 🔄] Threshold 0.20 yielded ${freshArticles.length} fresh articles. Relaxing match_threshold to -1.0...`);
+        const { data: fallbackArticles } = await supabaseServer
+            .rpc('match_news_articles', {
+                query_embedding: interestVector,
+                match_threshold: -1.0,
+                match_count: 50
+            });
+
+        if (fallbackArticles && fallbackArticles.length > 0) {
+            freshArticles = filterFreshArticles(fallbackArticles);
+            articles = fallbackArticles;
+        }
+    }
+
+    // Fallback 2: Direct Database Table Query for latest unread articles within 72 hours
+    if (freshArticles.length < 2) {
+        console.log(`[Direct DB Fallback 📥] Vector search yielded ${freshArticles.length} fresh articles. Fetching latest unread articles directly from articles table...`);
+        const threeDaysAgoISO = new Date(threeDaysAgoMs).toISOString();
+        const { data: dbLatestArticles } = await supabaseServer
+            .from('articles')
+            .select('id, title, content, published_at, source_domain')
+            .gte('created_at', threeDaysAgoISO)
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+        if (dbLatestArticles && dbLatestArticles.length > 0) {
+            freshArticles = filterFreshArticles(dbLatestArticles);
+            articles = dbLatestArticles;
+        }
+    }
+
+    // Final Failsafe: If total DB contains 0 articles within 72h window, skip safely
+    if (freshArticles.length < 2) {
+        console.log(`[Freshness Guard 🛑] User ${userId} has zero available unread articles in database. Skipping briefing creation.`);
         return [];
     }
 
-    // Application-Level Fallback: Enrich articles with published_at if RPC output lacks it
-    const missingPubDateIds = articles.filter((a: any) => !a.published_at).map((a: any) => Number(a.id)).filter(Boolean);
+    // Application-Level Fallback: Enrich articles with published_at if missing
+    const missingPubDateIds = freshArticles.filter((a: any) => !a.published_at).map((a: any) => Number(a.id)).filter(Boolean);
     if (missingPubDateIds.length > 0) {
         try {
             const { data: dbArticles } = await supabaseServer
@@ -106,7 +155,7 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
 
             if (dbArticles) {
                 const pubDateMap = new Map(dbArticles.map(a => [Number(a.id), a.published_at]));
-                articles.forEach((a: any) => {
+                freshArticles.forEach((a: any) => {
                     if (!a.published_at && pubDateMap.has(Number(a.id))) {
                         a.published_at = pubDateMap.get(Number(a.id));
                     }
@@ -117,25 +166,7 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         }
     }
 
-    const now = Date.now();
-    const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // Strict 72-hour recency window
-
-    // 3. Strict Filtering: Exclude consumed articles AND enforce 72h publication window
-    const freshArticles = articles.filter((article: any) => {
-        const isUsed = usedArticleIds.has(Number(article.id));
-        const pubDate = article.published_at ? new Date(article.published_at).getTime() : now;
-        const isRecent = pubDate >= threeDaysAgoMs;
-        return !isUsed && isRecent;
-    });
-
-    // Strict Freshness Guard: If deduplication and 72h recency window leaves fewer than 2 fresh unread articles for this user,
-    // return an empty array to prevent creating duplicate audiobooks with old news.
-    if (userId && freshArticles.length < 2) {
-        console.log(`[Freshness Guard 🛑] User ${userId} has insufficient fresh unread articles (${freshArticles.length} found within 72h window). Skipping briefing creation.`);
-        return [];
-    }
-
-    const candidateArticles = freshArticles.length > 0 ? freshArticles : articles;
+    const candidateArticles = freshArticles;
 
     const scoredArticles = candidateArticles.map((article: any) => {
         const publishedDate = article.published_at ? new Date(article.published_at).getTime() : now;
