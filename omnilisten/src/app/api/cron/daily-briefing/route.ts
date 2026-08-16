@@ -68,14 +68,21 @@ export async function GET(request: Request) {
             return { userId: users[i].id, status: 500, error: String(r.reason) };
         });
 
+        const processedCount = workerStatuses.filter(w => w.status >= 200 && w.status < 300 && (w as any).response?.status === "Success").length;
+        const skippedCount = workerStatuses.filter(w => w.status >= 200 && w.status < 300 && (w as any).response?.status === "Skipped").length;
         const successCount = workerStatuses.filter(w => w.status >= 200 && w.status < 300).length;
-        const overallStatus = successCount === users.length ? "Success" : successCount > 0 ? "PartialSuccess" : "Error";
+        const failedCount = workerStatuses.filter(w => w.status < 200 || w.status >= 300).length;
+
+        const overallStatus = processedCount > 0 ? "Success" : skippedCount === users.length ? "Skipped" : failedCount === users.length ? "Error" : "PartialSuccess";
 
         const executionTimeMs = Date.now() - startTime;
         const resultPayload = { 
             status: overallStatus, 
             totalUsers: users.length, 
             successfulWorkers: successCount,
+            processedWorkers: processedCount,
+            skippedWorkers: skippedCount,
+            failedWorkers: failedCount,
             dispatchedWorkers: dispatchResults.length,
             workerDetails: workerStatuses,
             executionTimeMs

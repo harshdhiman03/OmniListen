@@ -38,8 +38,8 @@ export async function GET(request: Request) {
             .eq('idempotency_key', idempotencyKey)
             .maybeSingle();
 
-        // Short-Circuit #1: If job is already COMPLETED today, return success immediately (0 cost / 0 API calls)
-        if (existingJob?.status === 'COMPLETED' && !forceReplay) {
+        // Short-Circuit #1: If job is already COMPLETED today with playlist generated (DONE), return success immediately
+        if (existingJob?.status === 'COMPLETED' && existingJob?.current_step === 'DONE' && !forceReplay) {
             return NextResponse.json({
                 status: "Success",
                 reason: "Already Completed Today (Idempotent Short-Circuit)",
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
                 await supabaseServer
                     .from('briefing_jobs')
                     .update({
-                        status: 'COMPLETED',
+                        status: 'SKIPPED',
                         current_step: 'SKIPPED',
                         error_message: 'No fresh unread news articles available for today',
                         updated_at: new Date().toISOString()

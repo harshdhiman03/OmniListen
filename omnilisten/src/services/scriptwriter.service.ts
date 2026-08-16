@@ -91,21 +91,22 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         });
 
     const now = Date.now();
-    const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // Strict 72-hour recency window
+    const threeDaysAgoMs = now - (72 * 60 * 60 * 1000); // 72-hour primary recency window
+    const sevenDaysAgoMs = now - (7 * 24 * 60 * 60 * 1000); // 7-day fallback window
 
-    // Helper: Filter unread articles within 72h recency window
-    const filterFreshArticles = (rawArticles: any[]) => {
+    // Helper: Filter unread articles within given time window
+    const filterFreshArticles = (rawArticles: any[], minTimeMs: number = threeDaysAgoMs) => {
         return rawArticles.filter((article: any) => {
             const isUsed = usedArticleIds.has(Number(article.id));
             const pubDate = article.published_at ? new Date(article.published_at).getTime() : now;
-            const isRecent = pubDate >= threeDaysAgoMs;
+            const isRecent = pubDate >= minTimeMs;
             return !isUsed && isRecent;
         });
     };
 
     let freshArticles = (articles && articles.length > 0) ? filterFreshArticles(articles) : [];
 
-    // Fallback 1: If threshold 0.20 yielded < 2 fresh articles, relax similarity threshold to -1.0 to capture all recent news
+    // Fallback 1: If threshold 0.20 yielded < 2 fresh articles, relax similarity threshold to -1.0
     if (freshArticles.length < 2) {
         console.log(`[Recency Fallback 🔄] Threshold 0.20 yielded ${freshArticles.length} fresh articles. Relaxing match_threshold to -1.0...`);
         const { data: fallbackArticles } = await supabaseServer
@@ -121,24 +122,32 @@ export async function getRelevantArticles(interestVector: number[], userId?: str
         }
     }
 
-    // Fallback 2: Direct Database Table Query for latest unread articles within 72 hours
+    // Fallback 2: Direct Database Table Query for latest unread articles (checking newest articles by id/published_at)
     if (freshArticles.length < 2) {
         console.log(`[Direct DB Fallback 📥] Vector search yielded ${freshArticles.length} fresh articles. Fetching latest unread articles directly from articles table...`);
-        const threeDaysAgoISO = new Date(threeDaysAgoMs).toISOString();
         const { data: dbLatestArticles } = await supabaseServer
             .from('articles')
             .select('id, title, content, published_at, source_domain')
-            .gte('created_at', threeDaysAgoISO)
-            .order('created_at', { ascending: false })
-            .limit(30);
+            .order('id', { ascending: false })
+            .limit(50);
 
         if (dbLatestArticles && dbLatestArticles.length > 0) {
-            freshArticles = filterFreshArticles(dbLatestArticles);
+            freshArticles = filterFreshArticles(dbLatestArticles, threeDaysAgoMs);
+            if (freshArticles.length < 2) {
+                // Extended 7-day window fallback if 72h window is sparse
+                freshArticles = filterFreshArticles(dbLatestArticles, sevenDaysAgoMs);
+            }
             articles = dbLatestArticles;
         }
     }
 
-    // Final Failsafe: If total DB contains 0 articles within 72h window, skip safely
+    // Fallback 3: Extended 7-day window check on initial vector search results if still < 2 articles
+    if (freshArticles.length < 2 && articles && articles.length > 0) {
+        console.log(`[Extended Window Fallback ⏰] Expanding recency window to 7 days for vector matches...`);
+        freshArticles = filterFreshArticles(articles, sevenDaysAgoMs);
+    }
+
+    // Final Failsafe: If total DB contains 0 articles within window, skip safely
     if (freshArticles.length < 2) {
         console.log(`[Freshness Guard 🛑] User ${userId} has zero available unread articles in database. Skipping briefing creation.`);
         return [];
