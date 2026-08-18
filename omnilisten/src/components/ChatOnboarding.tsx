@@ -144,6 +144,31 @@ export default function ChatOnboarding({ userId }: { userId?: string }) {
                         </div>
                     </div>
                 )}
+                {/* Interactive Guidance Toast when enough interests have been gathered */}
+                {userMessageCount >= 2 && (
+                    <div className="mx-2 p-4 bg-gradient-to-r from-cyan-950/80 via-blue-950/80 to-slate-900/90 border border-cyan-500/30 rounded-2xl backdrop-blur-xl shadow-[0_0_30px_rgba(6,182,212,0.2)] animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center shrink-0">
+                                <span className="text-lg">✨</span>
+                            </div>
+                            <div className="text-left">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Ready Whenever You Are</h4>
+                                <p className="text-xs text-gray-300">You can finalize your setup now to build your first audiobook, or keep explaining for deeper personalization!</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                            <button
+                                type="button"
+                                onClick={handleFinishSetup}
+                                disabled={isLoading}
+                                className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 rounded-xl transition-all duration-300 shadow-md hover:shadow-cyan-500/30 active:scale-95 disabled:opacity-50"
+                            >
+                                Finish Setup Now →
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} className="h-4" />
             </div>
 

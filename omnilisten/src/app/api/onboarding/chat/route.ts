@@ -25,7 +25,7 @@ export async function POST(request: Request) {
             });
         }
         
-        const systemInstruction = "You are an excellent onboarding assistant for a personalized news radio app. Ask EXACTLY ONE short follow-up question to dig deeper into the user's stated interests. Keep it very friendly and concise.";
+        const systemInstruction = "You are an excellent onboarding assistant for a personalized news radio app. Ask EXACTLY ONE short follow-up question to dig deeper into the user's stated interests. Remind them gently that they can click 'Finish Setup' at any time or share more details to refine their radio station. Keep it very friendly and concise.";
 
         const chatPrompt = formattedHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
         const reply = await generateTextContent({
