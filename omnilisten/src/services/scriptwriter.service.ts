@@ -1,5 +1,5 @@
 import { supabaseServer } from '@/lib/supabase';
-import { SCRIPTWRITER_SYSTEM_PROMPT } from '@/lib/gemini';
+import { genAI, SCRIPTWRITER_SYSTEM_PROMPT } from '@/lib/gemini';
 import Groq from 'groq-sdk';
 
 const groq = new Groq({
@@ -219,13 +219,32 @@ CRITICAL INSTRUCTIONS FOR AUDIO SYNTHESIS:
 7. DO NOT include speaker labels (like "Host:") or stage directions (like "(Intro music fades in)"). 
 8. Generate ONLY the exact words in ${targetLangName} that should be spoken out loud by the voice engine.`;
 
-    const chatCompletion = await groq.chat.completions.create({
-        messages: [
-            { role: 'system', content: SCRIPTWRITER_SYSTEM_PROMPT },
-            { role: 'user', content: prompt }
-        ],
-        model: 'llama-3.1-8b-instant',
-    });
+    try {
+        const geminiModel = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            systemInstruction: SCRIPTWRITER_SYSTEM_PROMPT
+        });
+        const geminiResult = await geminiModel.generateContent(prompt);
+        const scriptText = geminiResult.response.text();
+        if (scriptText && scriptText.trim().length > 0) {
+            return scriptText.trim();
+        }
+    } catch (geminiError: any) {
+        console.warn("Gemini script generation error, falling back to Groq:", geminiError.message || geminiError);
+    }
 
-    return chatCompletion.choices[0]?.message?.content || "";
+    try {
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: SCRIPTWRITER_SYSTEM_PROMPT },
+                { role: 'user', content: prompt }
+            ],
+            model: 'llama-3.3-70b-versatile',
+        });
+
+        return chatCompletion.choices[0]?.message?.content || "";
+    } catch (groqError: any) {
+        console.error("Groq fallback error:", groqError.message || groqError);
+        throw groqError;
+    }
 }

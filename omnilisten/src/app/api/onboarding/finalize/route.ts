@@ -26,15 +26,28 @@ export async function POST(request: Request) {
         
         const systemInstruction = "You are an analytical AI data extractor. Read the attached onboarding conversation and summarize the user's core interests into a single, highly dense paragraph. Do not include introductory filler, just the dense summary of all discovered topics, industries, and hobbies.";
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: conversationText }
-            ],
-            model: 'llama-3.1-8b-instant',
-        });
+        let summaryParagraph = "";
+        try {
+            const geminiModel = genAI.getGenerativeModel({
+                model: "gemini-2.5-flash",
+                systemInstruction: systemInstruction
+            });
+            const res = await geminiModel.generateContent(conversationText);
+            summaryParagraph = res.response.text();
+        } catch (geminiErr) {
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: systemInstruction },
+                    { role: 'user', content: conversationText }
+                ],
+                model: 'llama-3.3-70b-versatile',
+            });
+            summaryParagraph = chatCompletion.choices[0]?.message?.content || "General interests and world news";
+        }
 
-        const summaryParagraph = chatCompletion.choices[0]?.message?.content || "General interests and world news";
+        if (!summaryParagraph || summaryParagraph.trim().length === 0) {
+            summaryParagraph = "General interests and world news";
+        }
 
         // 3. Transform Summary into a Semantic Vector
         // Falling back to the currently supported gemini-embedding-001 model for Node.js

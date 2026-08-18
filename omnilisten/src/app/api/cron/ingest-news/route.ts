@@ -60,25 +60,39 @@ export async function GET(request: Request) {
             if (!combinedInterests || !apiKey) return;
 
             try {
-                const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
                 const NewsQueriesSchema = z.object({
                     queries: z.array(z.string().max(200)).max(15)
                 });
 
-                const { text } = await generateText({
-                    model: groq('llama-3.1-8b-instant'),
-                    system: `You are a News Director. Your task is to read the combined user interests provided and group them into a maximum of 15 highly optimized Boolean search queries using the OR operator (e.g., "Quantum Computing" OR "Artificial Intelligence").
-                    Ensure that no individual query string exceeds 200 characters in length. Do not include unnecessary filler words. Focus purely on the key entities, technologies, or subjects mentioned in the interests.
-                    
-                    IMPORTANT: You MUST respond ONLY with a valid JSON object matching this exact schema:
-                    {
-                      "queries": ["query 1", "query 2"]
-                    }
-                    Do not include any other text or markdown formatting.`,
-                    prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
-                });
+                const systemPrompt = `You are a News Director. Your task is to read the combined user interests provided and group them into a maximum of 15 highly optimized Boolean search queries using the OR operator (e.g., "Quantum Computing" OR "Artificial Intelligence").
+Ensure that no individual query string exceeds 200 characters in length. Do not include unnecessary filler words. Focus purely on the key entities, technologies, or subjects mentioned in the interests.
 
-                const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+IMPORTANT: You MUST respond ONLY with a valid JSON object matching this exact schema:
+{
+  "queries": ["query 1", "query 2"]
+}
+Do not include any other text or markdown formatting.`;
+
+                let rawText = "";
+                try {
+                    const geminiModel = genAI.getGenerativeModel({ 
+                        model: "gemini-2.5-flash",
+                        systemInstruction: systemPrompt 
+                    });
+                    const res = await geminiModel.generateContent(`Here are the combined user interests:\n\n${combinedInterests}`);
+                    rawText = res.response.text();
+                } catch (geminiErr) {
+                    console.warn("Gemini query gen fallback to Groq:", geminiErr);
+                    const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+                    const { text } = await generateText({
+                        model: groq('llama-3.3-70b-versatile'),
+                        system: systemPrompt,
+                        prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
+                    });
+                    rawText = text;
+                }
+
+                const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
                 const parsedData = JSON.parse(cleanText);
                 const validatedObject = NewsQueriesSchema.parse(parsedData);
                 generatedQueries = validatedObject.queries;

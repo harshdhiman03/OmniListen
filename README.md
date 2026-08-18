@@ -129,6 +129,11 @@ graph TD
 - **Serverless Pooling & NullPool**: Routes database connections through **Supavisor Transaction Pool** (Port 6543) using SQLAlchemy `NullPool` to handle thousands of concurrent serverless workers without connection exhaustion (`max_connections`).
 - **Collision Prevention (`statement_cache_size=0`)**: Explicitly disables driver-level prepared statement caching in `asyncpg` and SQLAlchemy (`statement_cache_size = 0`), eliminating cross-transaction prepared statement collisions (`__asyncpg_stmt_0__`).
 
+### 8. Explore Catalog & Active Telemetry Vector Steering ("Serendipity Injection")
+- **Cold-Start Resolution**: Solves new user cold-start onboarding via a curated, evergreen audiobook catalog (`explore_catalog`) across 5 categories ("Deep Tech", "Geopolitics", "Health & Longevity", "AI & Autonomy", "Fintech & Macro") with 0ms pre-generated MP3 tracks.
+- **Active Preference Steering**: Interactive player telemetry (`/api/telemetry/record-event`) captures plays and skips, updating `profiles.interest_vector` in real-time via dual-source L2 normalized moving average math:
+  $$\vec{V}_{\text{new}} = \text{Normalize}\left( 0.85 \cdot \vec{V}_{\text{current}} + 0.15 \cdot \text{Positives} - 0.05 \cdot \text{Negatives} \right)$$
+
 ---
 
 ## 📊 Database Schema (Supabase Postgres + pgvector)

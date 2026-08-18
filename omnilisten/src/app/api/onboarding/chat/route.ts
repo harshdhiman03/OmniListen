@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { genAI } from '@/lib/gemini';
 import Groq from 'groq-sdk';
 
 const groq = new Groq({
@@ -31,16 +32,29 @@ export async function POST(request: Request) {
         
         const systemInstruction = "You are an excellent onboarding assistant for a personalized news radio app. Ask EXACTLY ONE short follow-up question to dig deeper into the user's stated interests. Keep it very friendly and concise.";
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: systemInstruction },
-                ...formattedHistory
-            ],
-            model: 'llama-3.1-8b-instant',
-        });
+        let reply = "";
+        try {
+            const geminiModel = genAI.getGenerativeModel({
+                model: "gemini-2.5-flash",
+                systemInstruction: systemInstruction
+            });
+            const chatPrompt = formattedHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+            const res = await geminiModel.generateContent(chatPrompt);
+            reply = res.response.text();
+        } catch (geminiErr) {
+            console.error("Gemini fallback initiated:", geminiErr);
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: systemInstruction },
+                    ...formattedHistory
+                ],
+                model: 'llama-3.3-70b-versatile',
+            });
+            reply = chatCompletion.choices[0]?.message?.content || "Excellent, anything else?";
+        }
 
         // Return exactly what the UI component 'ChatOnboarding' expects
-        return NextResponse.json({ reply: chatCompletion.choices[0]?.message?.content || "Excellent, anything else?" });
+        return NextResponse.json({ reply: reply || "Excellent, anything else?" });
 
     } catch (error: any) {
         console.error("Chat Onboarding API error:", error);
