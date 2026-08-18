@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server';
-import { genAI } from '@/lib/gemini';
 import { supabaseServer } from '@/lib/supabase';
-
-// Inject Groq into the route explicitly
-import Groq from 'groq-sdk';
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
+import { generateTextContent, generateVectorEmbedding } from '@/services/ai-provider.service';
 
 export async function POST(request: Request) {
     try {
@@ -21,47 +14,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing chat history' }, { status: 400 });
         }
 
-        // 2. Synthesize History into an Analytical Block natively via LLaMA (bypassing Google's rate limits)
+        // 2. Synthesize History into an Analytical Block
         const conversationText = history.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
         
         const systemInstruction = "You are an analytical AI data extractor. Read the attached onboarding conversation and summarize the user's core interests into a single, highly dense paragraph. Do not include introductory filler, just the dense summary of all discovered topics, industries, and hobbies.";
 
-        let summaryParagraph = "";
-        try {
-            const geminiModel = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash",
-                systemInstruction: systemInstruction
-            });
-            const res = await geminiModel.generateContent(conversationText);
-            summaryParagraph = res.response.text();
-        } catch (geminiErr) {
-            const chatCompletion = await groq.chat.completions.create({
-                messages: [
-                    { role: 'system', content: systemInstruction },
-                    { role: 'user', content: conversationText }
-                ],
-                model: 'llama-3.3-70b-versatile',
-            });
-            summaryParagraph = chatCompletion.choices[0]?.message?.content || "General interests and world news";
-        }
+        let summaryParagraph = await generateTextContent({
+            prompt: conversationText,
+            systemInstruction
+        });
 
         if (!summaryParagraph || summaryParagraph.trim().length === 0) {
             summaryParagraph = "General interests and world news";
         }
 
         // 3. Transform Summary into a Semantic Vector
-        // Falling back to the currently supported gemini-embedding-001 model for Node.js
-        const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-        
-        const embedResult = await embeddingModel.embedContent({
-            content: {
-                role: "user",
-                parts: [{ text: summaryParagraph }]
-            },
-            outputDimensionality: 768
-        } as any);
-        
-        const embeddingVector = embedResult.embedding.values;
+        const embeddingVector = await generateVectorEmbedding(summaryParagraph);
 
         if (!embeddingVector || embeddingVector.length === 0) {
             throw new Error("Google GenAI failed to return an embedding vector");

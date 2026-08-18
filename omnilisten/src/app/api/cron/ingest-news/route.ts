@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { generateText } from 'ai';
-import { createGroq } from '@ai-sdk/groq';
 import { z } from 'zod';
-import { genAI } from '@/lib/gemini';
 import { fetchTopHackerNewsArticles } from '@/services/hackernews.service';
+import { generateTextContent, generateVectorEmbedding } from '@/services/ai-provider.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,24 +71,10 @@ IMPORTANT: You MUST respond ONLY with a valid JSON object matching this exact sc
 }
 Do not include any other text or markdown formatting.`;
 
-                let rawText = "";
-                try {
-                    const geminiModel = genAI.getGenerativeModel({ 
-                        model: "gemini-2.5-flash",
-                        systemInstruction: systemPrompt 
-                    });
-                    const res = await geminiModel.generateContent(`Here are the combined user interests:\n\n${combinedInterests}`);
-                    rawText = res.response.text();
-                } catch (geminiErr) {
-                    console.warn("Gemini query gen fallback to Groq:", geminiErr);
-                    const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
-                    const { text } = await generateText({
-                        model: groq('llama-3.3-70b-versatile'),
-                        system: systemPrompt,
-                        prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
-                    });
-                    rawText = text;
-                }
+                const rawText = await generateTextContent({
+                    prompt: `Here are the combined user interests:\n\n${combinedInterests}`,
+                    systemInstruction: systemPrompt
+                });
 
                 const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
                 const parsedData = JSON.parse(cleanText);
@@ -171,22 +155,10 @@ Do not include any other text or markdown formatting.`;
         // --- Embedding Generation and Insertion ---
         let insertedCount = 0;
         if (trulyNewArticles.length > 0) {
-            const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-
             const articlesToInsert = await Promise.all(
                 trulyNewArticles.map(async (article) => {
                     const combinedText = `Title: ${article.title || ""}\nDescription: ${article.description || ""}\nContent: ${article.content || ""}`;
-                    
-                    const embedResult = await embeddingModel.embedContent({
-                        content: {
-                            role: "user",
-                            parts: [{ text: combinedText }]
-                        },
-                        taskType: "RETRIEVAL_DOCUMENT",
-                        outputDimensionality: 768
-                    } as any);
-
-                    const embeddingVector = embedResult.embedding.values;
+                    const embeddingVector = await generateVectorEmbedding(combinedText);
 
                     return {
                         title: article.title || "",
