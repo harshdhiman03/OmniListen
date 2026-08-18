@@ -3,11 +3,11 @@
 [![Production Live](https://img.shields.io/badge/Production-Live%20App-06b6d4?style=for-the-badge&logo=vercel)](https://omni-listen-fd6n.vercel.app)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16%20App%20Router-000000?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20pgvector-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
-[![Groq LLaMA 3.1](https://img.shields.io/badge/Groq-LLaMA%203.1%208B-F34E36?style=for-the-badge&logo=openai)](https://groq.com/)
-[![Gemini Embeddings](https://img.shields.io/badge/Google-Gemini%20Embeddings-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
-[![Framer Motion](https://img.shields.io/badge/Framer-Motion%2060fps-0055FF?style=for-the-badge&logo=framer)](https://framer.com/motion)
+[![Gemini 2.5 Flash](https://img.shields.io/badge/Google-Gemini%202.5%20Flash-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
+[![Groq API](https://img.shields.io/badge/Groq-LLaMA%203.3%2070B%20Fallback-F34E36?style=for-the-badge&logo=openai)](https://groq.com/)
+[![Framer Motion](https://img.shields.io/badge/Framer-Motion%2060fps-0055FF?style=for-the-badge&logo=framer)](https://framer.com/)
 
-**OmniListen** is an enterprise-grade AI personalized news podcast and audio briefing platform. It continuously ingests real-time global news via a multi-source hybrid pipeline (GNews + Hacker News Firebase API), matches stories against user interest vector embeddings via RAG (Retrieval-Augmented Generation), crafts cohesive 3-minute conversational audiobooks using Groq LLaMA 3.1, synthesizes human-like speech across 10 languages (English + 9 Indian regional languages), and dynamically recalibrates user preference vectors based on listening telemetry.
+**OmniListen** is an enterprise-grade AI personalized news podcast and audio briefing platform. It continuously ingests real-time global news via a multi-source hybrid pipeline (GNews + Hacker News Firebase API), matches stories against user interest vector embeddings via RAG (Retrieval-Augmented Generation), crafts cohesive 3-minute conversational audiobooks using Google Gemini 2.5 Flash with automatic Groq API fallback, synthesizes human-like speech across 10 languages (English + 9 Indian regional languages), and dynamically recalibrates user preference vectors based on listening telemetry.
 
 ---
 
@@ -20,9 +20,13 @@
 
 ### 1. 🎙️ Hyper-Personalized AI Audio Briefings
 - **Vector RAG Matching**: Personal interest embeddings (768-dimensional) generated during onboarding are matched against ingested real-time news articles.
-- **Conversational Scriptwriting**: On-demand 3-minute spoken news podcasts generated via Groq LLaMA 3.1 Instant with natural, human-like pacing.
+- **Conversational Scriptwriting**: On-demand 3-minute spoken news podcasts generated via Google Gemini 2.5 Flash with automatic Groq API fallback (`llama-3.3-70b-versatile`).
 
-### 2. 🌍 Multi-Lingual Speech Engine (10 Languages)
+### 2. 💬 Interactive Conversational Onboarding & Setup Guidance
+- **Adaptive AI Chatbot**: Conversational AI assistant guides new users through onboarding, gathering specific topics, industries, and hobbies.
+- **Smart Setup Guidance Toast**: When at least 2 interests are captured, an interactive glassmorphic toast banner ("Ready Whenever You Are") appears in real time with a 1-click **"Finish Setup Now →"** button while encouraging further explanations.
+
+### 3. 🌍 Multi-Lingual Speech Engine (10 Languages)
 - **Native Indic Script Support**: Native script rendering and speech synthesis across 10 languages:
   - 🇬🇧 **English** (`en`)
   - 🇮🇳 **Hindi (हिन्दी)** (`hi`)
@@ -31,25 +35,25 @@
   - 🇮🇳 **Bengali (বাংলা)** (`bn`)
   - 🇮🇳 **Marathi (मराठी)** (`mr`)
   - 🇮🇳 **Gujarati (ગુજરાતી)** (`gu`)
-  - 🇮🇳 **Kannada (<ctrl42>ಕನ್ನಡ)** (`kn`)
+  - 🇮🇳 **Kannada (ಕನ್ನಡ)** (`kn`)
   - 🇮🇳 **Malayalam (മലയാളം)** (`ml`)
   - 🇮🇳 **Punjabi (ਪੰਜਾਬੀ)** (`pa`)
 - **Lazy Translation & 0ms Audio Caching**: Server actions translate scripts and synthesize audio on-demand, storing public MP3 URLs in a JSONB cache map (`audio_urls_by_lang`) for instant 0ms replays.
 
-### 3. 🎨 Futuristic Dark-Mode "Liquid Glassmorphic" UI
+### 4. 🎨 Futuristic Dark-Mode "Liquid Glassmorphic" UI
 - **60fps Liquid Orb Visualizer**: GPU-accelerated Web Audio API frequency visualizer powered by Framer Motion (`useMotionValue`, `useSpring`, `useTransform`).
 - **Dynamic 3D Inset Glass Glow**: Real-time frequency low-pass filtering driving inset white highlights and dynamic cyan audio glows on GPU without triggering React component re-renders.
 
-### 4. 🧠 Telemetry-Driven Dynamic Vector Recalibration
+### 5. 🧠 Telemetry-Driven Dynamic Vector Recalibration
 - **Adaptive Preference Shifts**: User preference vectors automatically update based on listening events (plays, skips, completion ratios, and duration):
   $$\vec{V}_{\text{new}} = \text{Normalize}\left( 0.85 \cdot \vec{V}_{\text{current}} + 0.15 \cdot \text{Positives} - 0.05 \cdot \text{Negatives} \right)$$
 
-### 5. 🛡️ Smart Article Deduplication & 72-Hour Recency Window
+### 6. 🛡️ Smart Article Deduplication & 72-Hour Recency Window
 - **7-Day Consumption Bookmarking**: Tracks consumed `article_ids` in `daily_playlists` to guarantee 100% fresh, unseen news in every briefing.
 - **Strict 72-Hour Recency Guard**: Automatically excludes news published more than 3 days ago, preventing outdated stories from appearing in daily briefings.
 
-### 6. 🔄 Dead Letter Queue (DLQ) & Idempotency Keys
-- **Step-Level Checkpointing**: `briefing_jobs` state machine checkpoints execution (`INIT` → `SCRIPTING` → `TTS_SYNTHESIS` → `DONE`). If TTS fails mid-script, retried workers reuse existing Groq scripts from DB—saving LLM tokens and API costs.
+### 7. 🔄 Dead Letter Queue (DLQ) & Idempotency Keys
+- **Step-Level Checkpointing**: `briefing_jobs` state machine checkpoints execution (`INIT` → `SCRIPTING` → `TTS_SYNTHESIS` → `DONE`). If TTS fails mid-script, retried workers reuse existing scripts from DB—saving LLM tokens and API costs.
 - **212ms Idempotent Short-Circuit**: Idempotency keys (`briefing_<user>_<date>`) ensure retried finished briefings return instantly (**212 ms**) with 0 duplicate DB entries or LLM calls.
 - **Automated DLQ Recovery**: `/api/cron/process-dlq` periodically re-dispatches failed jobs with exponential backoff (`5m`, `10m`, `20m`).
 
@@ -60,7 +64,7 @@
 | Feature & UX Dimension | Generic Chatbots (ChatGPT / Gemini) | 🎧 OmniListen AI Platform |
 | :--- | :--- | :--- |
 | **Morning Routine UX** | ❌ **High Friction**: Requires unlocking phone, typing/speaking prompts, waiting for text generation, and tapping Voice Mode daily. | ⚡ **Zero-Friction Hands-Free Audio**: Pre-rendered daily 3-minute briefing ready before you wake up with 1-click lockscreen / Bluetooth playback. |
-| **Fact Grounding & Accuracy** | ⚠️ **Hallucination Risk**: Relies on unverified web search snippets or static model weights. | 🛡️ **Vector RAG Grounded**: Multi-source news ingestion (GNews + Hacker News API) vector-matched via 768d Gemini embeddings and grounded in Groq LLaMA context. |
+| **Fact Grounding & Accuracy** | ⚠️ **Hallucination Risk**: Relies on unverified web search snippets or static model weights. | 🛡️ **Vector RAG Grounded**: Multi-source news ingestion (GNews + Hacker News API) vector-matched via 768d Gemini embeddings and grounded in Gemini 2.5 Flash / Groq context. |
 | **Story Deduplication** | ❌ **Repetitive News**: Re-tells yesterday's major headlines because it lacks persistent listening memory. | 🎯 **100% Guaranteed Fresh News**: 7-day `article_ids` consumption bookmarking + Strict Freshness Guard automatically skips duplicate briefings. |
 | **Recency & Time Decay** | ⚠️ **Stale Story Matching**: Matches high-similarity articles regardless of publication age. | ⏱️ **72h Recency Window**: Exponential time-decay scoring ($\text{Similarity} \times e^{-0.1 \times \text{DaysOld}}$) strictly excludes news older than 72 hours. |
 | **Multi-Lingual Indic Speech** | ⚠️ **Generic Voice Synthesis**: Struggles with authentic regional Indic accents, script nuance, and sentence cadence. | 🌍 **Native 10 Indic Speech Engine**: Native script rendering and localized speech synthesis for English + 9 Indian regional languages with 0ms JSONB audio caching. |
@@ -91,7 +95,7 @@ graph TD
     DLQRoute -->|Exponential Backoff Retry| Worker
     Worker -->|Check Idempotency & State Checkpoint| JobsDB[(briefing_jobs Table)]
     Worker -->|7-Day Deduplication + 72h Recency Search| SupabaseDB
-    Worker -->|Draft Podcast Script| Groq[Groq LLaMA 3.1 8B Instant]
+    Worker -->|Draft Podcast Script| AIService[AI Provider Service: Gemini 2.5 Flash + Groq Fallback]
     Worker -->|Parallel Chunk Synthesis| SpeechEngine["Multi-Lingual Speech Engine"]
     SpeechEngine -->|Upload MP3 Chunks| SupabaseStorage[(Supabase Storage)]
     Worker -->|Insert Playlist & Update Job State| SupabaseDB
@@ -109,30 +113,29 @@ graph TD
 ### 2. Multi-Source Ingestion (Hacker News Firebase API + GNews)
 - **Open Access**: Combined GNews API with Hacker News Firebase REST API (`https://hacker-news.firebaseio.com/v0/topstories.json`) to ingest top tech, AI, startup, and scientific news at **$0 cost with 0 rate limits**.
 
-### 3. Recency-Weighted Hybrid Vector Search & 72h Guard
+### 3. Open-Source Dual AI Provider Service (`ai-provider.service.ts`)
+- **Zero-Downtime Provider Resilience**: Unified text generation and embedding requests through `ai-provider.service.ts`. If the primary provider (Gemini `gemini-2.5-flash`) hits rate limits or network issues, it automatically falls back to Groq (`llama-3.3-70b-versatile`) seamlessly.
+- **Environment-Driven Model String Resolution**: Model names are resolved via `GEMINI_MODEL_NAME` and `GROQ_MODEL_NAME` in `.env.local`, enabling open-source users to customize model strings without editing source code.
+
+### 4. Recency-Weighted Hybrid Vector Search & 72h Guard
 - **Formula**: Applies an exponential time-decay penalty to similarity scores:
   $$\text{Final Score} = \text{CosineSimilarity} \times e^{-0.1 \times \text{DaysOld}}$$
 - **72-Hour Guard**: Strictly excludes articles published more than 3 days ago to guarantee fresh news in every daily briefing.
 
-### 4. Telemetry-Driven Interest Vector Recalibration
+### 5. Telemetry-Driven Interest Vector Recalibration
 - **Adaptive Vector Math**: Recalibrates user `interest_vector` using exponential moving averages derived from listening duration, completion ratios, and skip events.
 
-### 5. Dead Letter Queue (DLQ) & Idempotency Key Architecture
+### 6. Dead Letter Queue (DLQ) & Idempotency Key Architecture
 - **Idempotency Keys**: Deterministic keys (`briefing_<user>_<date>`) track execution in `briefing_jobs`. Short-circuits finished briefings in **212 ms** with 0 duplicate DB rows or LLM API costs.
-- **Step Checkpointing & Recovery**: Checkpoints execution state (`INIT` → `SCRIPTING` → `TTS_SYNTHESIS` → `DONE`). If TTS fails mid-script, retries reuse pre-generated script text without re-querying Groq.
+- **Step Checkpointing & Recovery**: Checkpoints execution state (`INIT` → `SCRIPTING` → `TTS_SYNTHESIS` → `DONE`). If TTS fails mid-script, retries reuse pre-generated script text without re-querying LLM providers.
 - **Automated DLQ Cron**: `/api/cron/process-dlq` re-dispatches failed jobs with exponential backoff (`5m`, `10m`, `20m`), routing exhausted retries to `DEAD_LETTER` state.
 
-### 6. Parallel Worker Execution Speedup (94.5% Reduction)
+### 7. Parallel Worker Execution Speedup (94.5% Reduction)
 - **Parallel Synthesis**: Refactored worker TTS chunk synthesis and storage uploads from a sequential loop to parallel `Promise.all` execution, dropping execution duration from **147.8s** down to **8.06s**.
 
-### 7. Supavisor Transaction Pooling & Prepared Statement Collision Defense
+### 8. Supavisor Transaction Pooling & Prepared Statement Collision Defense
 - **Serverless Pooling & NullPool**: Routes database connections through **Supavisor Transaction Pool** (Port 6543) using SQLAlchemy `NullPool` to handle thousands of concurrent serverless workers without connection exhaustion (`max_connections`).
 - **Collision Prevention (`statement_cache_size=0`)**: Explicitly disables driver-level prepared statement caching in `asyncpg` and SQLAlchemy (`statement_cache_size = 0`), eliminating cross-transaction prepared statement collisions (`__asyncpg_stmt_0__`).
-
-### 8. Explore Catalog & Active Telemetry Vector Steering ("Serendipity Injection")
-- **Cold-Start Resolution**: Solves new user cold-start onboarding via a curated, evergreen audiobook catalog (`explore_catalog`) across 5 categories ("Deep Tech", "Geopolitics", "Health & Longevity", "AI & Autonomy", "Fintech & Macro") with 0ms pre-generated MP3 tracks.
-- **Active Preference Steering**: Interactive player telemetry (`/api/telemetry/record-event`) captures plays and skips, updating `profiles.interest_vector` in real-time via dual-source L2 normalized moving average math:
-  $$\vec{V}_{\text{new}} = \text{Normalize}\left( 0.85 \cdot \vec{V}_{\text{current}} + 0.15 \cdot \text{Positives} - 0.05 \cdot \text{Negatives} \right)$$
 
 ---
 
@@ -235,8 +238,8 @@ cd OmniListen/omnilisten
 
 ---
 
-### Step 2: Configure Environment Variables
-Create `.env.local` inside `omnilisten/`:
+### Step 2: Configure Environment Variables & AI Provider API Setup
+Create `.env.local` inside `omnilisten/` (refer to `.env.example` template):
 
 ```env
 # Supabase Configuration
@@ -244,14 +247,38 @@ NEXT_PUBLIC_SUPABASE_URL=https://<YOUR_SUPABASE_ID>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
 SUPABASE_SERVICE_KEY=<YOUR_SUPABASE_SERVICE_ROLE_KEY>
 
-# AI & LLM Provider Keys
+# Application Base URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Security & Cron Authentication
+CRON_SECRET=<YOUR_CRON_SECRET>
+
+# AI & LLM Provider Execution Strategy
+# Options: 'auto' (Gemini -> Groq fallback) | 'gemini' | 'groq'
+LLM_PROVIDER=auto
+
+# Model String Configurations (Adjustable without code edits)
+GEMINI_MODEL_NAME=gemini-2.5-flash
+GROQ_MODEL_NAME=llama-3.3-70b-versatile
+
+# AI Provider API Keys
 GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 GROQ_API_KEY=<YOUR_GROQ_API_KEY>
 
-# External Data APIs & Security
+# External Data APIs
 GNEWS_API_KEY=<YOUR_GNEWS_API_KEY>
-CRON_SECRET=<YOUR_CRON_SECRET>
 ```
+
+#### 🔑 Obtaining & Configuring AI Provider API Keys:
+
+1. **Google Gemini API Key (`GEMINI_API_KEY`)**:
+   - Get a free API key at [Google AI Studio](https://aistudio.google.com/).
+   - Used as the default provider for text completion (`gemini-2.5-flash`), onboarding chat follow-ups, news search query generation, and 768-dimensional semantic vector embeddings (`gemini-embedding-001`).
+
+2. **Groq API Key (`GROQ_API_KEY`)**:
+   - Get a free API key at [Groq Console](https://console.groq.com/).
+   - Used as an ultra-fast fallback LLM for scriptwriting and onboarding.
+   - **Important Groq Model Setup**: Ensure your desired model (e.g. `llama-3.3-70b-versatile`) is enabled in your Groq Console under [Organization Settings -> Limits](https://console.groq.com/settings/limits). You can customize the model name anytime via `GROQ_MODEL_NAME` in `.env.local`.
 
 ---
 
