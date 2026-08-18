@@ -15,29 +15,45 @@ export interface IGenerateTextOptions {
 }
 
 /**
- * Open-Source Flexible & Resilient Dual AI Provider Service.
- * Automatically handles text generation across Google Gemini and Groq API
- * with configurable model strings and automatic zero-downtime fallbacks.
+ * Open-Source Resilient Multi-Tier Dual AI Provider Service.
+ * Features an exponential backoff retry engine for Google Gemini (recovering from 503 high demand spikes)
+ * and multi-model fallback cascades for Groq API (recovering from 404/400 model deprecations).
  */
 export async function generateTextContent(options: IGenerateTextOptions): Promise<string> {
     const { prompt, systemInstruction } = options;
 
     const tryGemini = async (): Promise<string | null> => {
-        try {
-            const geminiModel = genAI.getGenerativeModel({
-                model: DEFAULT_GEMINI_MODEL,
-                systemInstruction: systemInstruction || undefined
-            });
-            const res = await geminiModel.generateContent(prompt);
-            const text = res.response.text();
-            if (text && text.trim().length > 0) {
-                return text.trim();
+        const geminiModelsToTry = Array.from(new Set([
+            DEFAULT_GEMINI_MODEL,
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash-latest'
+        ]));
+
+        for (const modelName of geminiModelsToTry) {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const geminiModel = genAI.getGenerativeModel({
+                        model: modelName,
+                        systemInstruction: systemInstruction || undefined
+                    });
+                    const res = await geminiModel.generateContent(prompt);
+                    const text = res.response.text();
+                    if (text && text.trim().length > 0) {
+                        return text.trim();
+                    }
+                } catch (err: any) {
+                    console.warn(`[AI Provider Warning] Gemini (${modelName}, attempt ${attempt}/3) error:`, err.message || err);
+                    // Exponential backoff delay for 503 high demand spikes or 429 rate limits
+                    if (attempt < 3 && (err.message?.includes('503') || err.status === 503 || err.status === 429)) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                    } else {
+                        break; // try next model if non-retriable or max retries reached
+                    }
+                }
             }
-            return null;
-        } catch (err: any) {
-            console.warn(`[AI Provider Warning] Gemini (${DEFAULT_GEMINI_MODEL}) generation error:`, err.message || err);
-            return null;
         }
+        return null;
     };
 
     const tryGroq = async (): Promise<string | null> => {
@@ -45,40 +61,53 @@ export async function generateTextContent(options: IGenerateTextOptions): Promis
             console.warn("[AI Provider Warning] Groq API key not configured.");
             return null;
         }
-        try {
-            const messages: any[] = [];
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-            messages.push({ role: 'user', content: prompt });
 
-            const completion = await groq.chat.completions.create({
-                messages,
-                model: DEFAULT_GROQ_MODEL,
-            });
-            const text = completion.choices[0]?.message?.content;
-            if (text && text.trim().length > 0) {
-                return text.trim();
+        const groqModelsToTry = Array.from(new Set([
+            DEFAULT_GROQ_MODEL,
+            'llama-3.3-70b-versatile',
+            'openai/gpt-oss-120b',
+            'openai/gpt-oss-20b',
+            'qwen/qwen3.6-27b',
+            'groq/compound',
+            'groq/compound-mini',
+            'allam-2-7b'
+        ]));
+
+        for (const modelName of groqModelsToTry) {
+            try {
+                const messages: any[] = [];
+                if (systemInstruction) {
+                    messages.push({ role: 'system', content: systemInstruction });
+                }
+                messages.push({ role: 'user', content: prompt });
+
+                const completion = await groq.chat.completions.create({
+                    messages,
+                    model: modelName,
+                });
+                const text = completion.choices[0]?.message?.content;
+                if (text && text.trim().length > 0) {
+                    return text.trim();
+                }
+            } catch (err: any) {
+                console.warn(`[AI Provider Warning] Groq (${modelName}) error:`, err.message || err);
             }
-            return null;
-        } catch (err: any) {
-            console.warn(`[AI Provider Warning] Groq (${DEFAULT_GROQ_MODEL}) generation error:`, err.message || err);
-            return null;
         }
+        return null;
     };
 
     // Provider Execution Strategy
     if (PREFERRED_PROVIDER === 'groq') {
         const groqResult = await tryGroq();
         if (groqResult) return groqResult;
-        console.log("[AI Provider Fallback] Falling back to Gemini...");
+        console.log("[AI Provider Fallback] Groq failed. Falling back to Gemini multi-tier retry engine...");
         const geminiResult = await tryGemini();
         if (geminiResult) return geminiResult;
     } else {
         // Default 'auto' or 'gemini'
         const geminiResult = await tryGemini();
         if (geminiResult) return geminiResult;
-        console.log("[AI Provider Fallback] Falling back to Groq...");
+        console.log("[AI Provider Fallback] Gemini failed/busy. Falling back to Groq multi-tier cascade...");
         const groqResult = await tryGroq();
         if (groqResult) return groqResult;
     }
