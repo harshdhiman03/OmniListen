@@ -80,7 +80,7 @@ graph TD
     User([User / Mobile Browser]) -->|Next.js 16 App Router| Frontend[OmniListen Dashboard]
     Frontend -->|MediaSession API| Lockscreen[Mobile Lockscreen Controls]
     Frontend -->|Web Audio API| Visualizer[Liquid Orb 60fps Canvas]
-    Frontend -->|Telemetry API| Telemetry[/api/telemetry]
+    Frontend -->|Telemetry API| Telemetry["/api/telemetry"]
     Telemetry -->|Recalibrate Vector| RecalibrationEngine[Recalibration Service]
     
     CronTrigger[Vercel Cron Trigger] -->|03:00 UTC| IngestRoute["/api/cron/ingest-news"]
